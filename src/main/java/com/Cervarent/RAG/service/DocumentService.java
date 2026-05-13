@@ -2,6 +2,7 @@ package com.Cervarent.RAG.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,7 +12,6 @@ import com.Cervarent.RAG.repository.DocumentRepository;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +20,7 @@ public class DocumentService {
     
     private final DocumentRepository documentRepository;
     private final EmbeddingService embeddingService;
+    private final JdbcTemplate jdbcTemplate;  // AJOUTER ÇA
     
     private static final int CHUNK_SIZE = 1000;
     private static final int CHUNK_OVERLAP = 200;
@@ -31,62 +32,60 @@ public class DocumentService {
         List<String> chunks = splitIntoChunks(request.getContent());
         log.info("Document découpé en {} chunks", chunks.size());
         
-        List<DocumentChunk> documentChunks = new ArrayList<>();
-        
         for (int i = 0; i < chunks.size(); i++) {
             String chunkText = chunks.get(i);
-            
-            // Créer l'embedding (List<Float>)
             List<Float> embeddingList = embeddingService.embed(chunkText);
             
-            // CONVERTIR en String format PostgreSQL vector
+            // String format [x,y,z] — comme avant
             String embeddingString = embeddingList.stream()
                     .map(String::valueOf)
-                    .collect(Collectors.joining(",", "[", "]"));
+                    .collect(java.util.stream.Collectors.joining(",", "[", "]"));
             
-            DocumentChunk docChunk = new DocumentChunk();
-            docChunk.setDocumentTitle(request.getTitle());
-            docChunk.setContent(chunkText);
-            docChunk.setChunkIndex(i);
-            docChunk.setEmbedding(embeddingString); // String, pas List
-            docChunk.setSource(request.getSource());
+            // INSERT avec CAST forcé
+            String sql = """
+                INSERT INTO document_chunks 
+                (document_title, content, chunk_index, embedding, source, created_at)
+                VALUES (?, ?, ?, ?::vector, ?, NOW())
+                """;
             
-            documentChunks.add(docChunk);
+            jdbcTemplate.update(sql,
+                request.getTitle(),
+                chunkText,
+                i,
+                embeddingString,
+                request.getSource()
+            );
             
-            log.debug("Chunk {} vectorisé", i);
+            log.debug("Chunk {} inséré", i);
         }
         
-        documentRepository.saveAll(documentChunks);
-        log.info("Document indexé avec succès: {} chunks sauvegardés", documentChunks.size());
+        log.info("Document indexé: {} chunks", chunks.size());
+    }
+    
+    // getAllChunks() reste avec JPA
+    public List<DocumentChunk> getAllChunks() {
+        return documentRepository.findAll();
     }
     
     private List<String> splitIntoChunks(String text) {
+        // ... votre code existant ...
         List<String> chunks = new ArrayList<>();
-        
         if (text.length() <= CHUNK_SIZE) {
             chunks.add(text);
             return chunks;
         }
-        
         int start = 0;
         while (start < text.length()) {
             int end = Math.min(start + CHUNK_SIZE, text.length());
-            
             if (end < text.length()) {
                 int lastPeriod = text.lastIndexOf(". ", end);
                 if (lastPeriod > start && lastPeriod > end - 100) {
                     end = lastPeriod + 1;
                 }
             }
-            
             chunks.add(text.substring(start, end).trim());
             start = end - CHUNK_OVERLAP;
         }
-        
         return chunks;
-    }
-    
-    public List<DocumentChunk> getAllChunks() {
-        return documentRepository.findAll();
     }
 }
