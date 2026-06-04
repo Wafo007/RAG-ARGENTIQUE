@@ -1,5 +1,10 @@
 package com.Cervarent.RAG.controller;
 
+// Imports à ajouter en haut du fichier
+import org.springframework.web.multipart.MultipartFile;
+import com.Cervarent.RAG.dto.UploadResponse;
+import com.Cervarent.RAG.service.FileUploadService;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +16,11 @@ import com.Cervarent.RAG.entity.DocumentChunk;
 import com.Cervarent.RAG.service.DocumentService;
 import com.Cervarent.RAG.service.RagService;
 
+import org.springframework.web.multipart.MultipartFile;
+import com.Cervarent.RAG.dto.UploadResponse;
+import com.Cervarent.RAG.service.FileUploadService;
+
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,42 +36,78 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/rag")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")  // Autorise les requêtes cross-origin (pour frontend)
+@CrossOrigin(origins = "*") // Autorise les requêtes cross-origin (pour frontend)
 public class RagController {
-    
+
     private final DocumentService documentService;
     private final RagService ragService;
-    
+
+    // Injection du service dans le controller
+    private final FileUploadService fileUploadService;
+
+    // ============================================
+    // UPLOAD DE FICHIERS (PDF, TXT, DOCX)
+    // ============================================
+
+    /**
+     * Endpoint pour uploader et indexer un fichier.
+     * 
+     * @param file Le fichier à uploader (multipart/form-data)
+     * @param mode "thinking" = synchrone (attend la fin),
+     *             "instant" = asynchrone (répond immédiatement)
+     * @return UploadResponse avec statut et message
+     */
+    @PostMapping(value = "/upload", consumes = "multipart/form-data")
+    public ResponseEntity<UploadResponse> uploadFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "mode", defaultValue = "thinking") String mode) throws IOException {
+
+        UploadResponse response = fileUploadService.uploadFile(file, mode);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Endpoint pour vérifier le statut d'un fichier uploadé en mode "instant".
+     * 
+     * @param fileId ID du fichier retourné lors de l'upload
+     * @return UploadResponse avec le statut actuel
+     */
+    @GetMapping("/files/{fileId}/status")
+    public ResponseEntity<UploadResponse> getFileStatus(@PathVariable Long fileId) {
+        UploadResponse response = fileUploadService.getFileStatus(fileId);
+        return ResponseEntity.ok(response);
+    }
+
     /**
      * Indexe un nouveau document.
      * 
      * Exemple de requête :
      * POST /api/rag/index
      * {
-     *   "title": "Guide Spring Boot",
-     *   "content": "Spring Boot est un framework Java...",
-     *   "source": "guide.pdf"
+     * "title": "Guide Spring Boot",
+     * "content": "Spring Boot est un framework Java...",
+     * "source": "guide.pdf"
      * }
      */
     @PostMapping("/index")
     public ResponseEntity<Map<String, String>> indexDocument(@RequestBody DocumentRequest request) {
         documentService.indexDocument(request);
-        
+
         Map<String, String> response = new HashMap<>();
         response.put("status", "success");
         response.put("message", "Document indexé avec succès: " + request.getTitle());
-        
+
         return ResponseEntity.ok(response);
     }
-    
+
     /**
      * Pose une question au système RAG.
      * 
      * Exemple de requête :
      * POST /api/rag/ask
      * {
-     *   "question": "Qu'est-ce que Spring Boot ?",
-     *   "topK": 3
+     * "question": "Qu'est-ce que Spring Boot ?",
+     * "topK": 3
      * }
      */
     @PostMapping("/ask")
@@ -69,7 +115,7 @@ public class RagController {
         RagResponse response = ragService.answerQuestion(request);
         return ResponseEntity.ok(response);
     }
-    
+
     /**
      * Récupère tous les chunks indexés (utile pour debug).
      */
@@ -77,7 +123,7 @@ public class RagController {
     public ResponseEntity<List<DocumentChunk>> getAllDocuments() {
         return ResponseEntity.ok(documentService.getAllChunks());
     }
-    
+
     /**
      * Endpoint de santé pour vérifier que le service fonctionne.
      */
