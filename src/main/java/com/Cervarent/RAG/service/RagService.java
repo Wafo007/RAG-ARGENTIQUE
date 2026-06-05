@@ -11,11 +11,13 @@ import org.springframework.stereotype.Service;
 
 import com.Cervarent.RAG.dto.QuestionRequest;
 import com.Cervarent.RAG.dto.RagResponse;
+import com.Cervarent.RAG.dto.RagLogEntry;
 import com.Cervarent.RAG.entity.DocumentChunk;
 import com.Cervarent.RAG.repository.DocumentRepository;
 
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,6 +29,12 @@ public class RagService {
     private final EmbeddingService embeddingService;
     private final ChatModel chatModel;
     
+    /**
+     * Répond à une question en utilisant le RAG.
+     * 
+     * @param request La question de l'utilisateur
+     * @return RagResponse allégée pour le client
+     */
     public RagResponse answerQuestion(QuestionRequest request) {
         long startTime = System.currentTimeMillis();
         
@@ -56,7 +64,7 @@ public class RagService {
                 .build();
         }
         
-        // ÉTAPE 3 : Construire le contexte
+        // ÉTAPE 3 : Construire le contexte (pour le prompt)
         String context = buildContext(relevantChunks);
         
         // ÉTAPE 4 : Générer la réponse
@@ -67,8 +75,9 @@ public class RagService {
             Règles :
             - Réponds uniquement avec les informations du contexte
             - Si tu ne trouves pas la réponse, dis-le honnêtement
-            - Cite toujours les sources de tes informations
             - Sois concis mais complet
+            - Ne mentionne PAS les numéros de chunks ou de documents internes
+            - Cite les sources de manière générale (ex: "selon le document sur les SVM")
             
             Contexte des documents :
             %s
@@ -85,31 +94,97 @@ public class RagService {
         
         long processingTime = System.currentTimeMillis() - startTime;
         
-        List<RagResponse.Source> sources = relevantChunks.stream()
-            .map(chunk -> RagResponse.Source.builder()
-                .documentTitle(chunk.getDocumentTitle())
-                .content(chunk.getContent())
-                .source(chunk.getSource())
-                .relevanceScore(0.0)
+        // ============================================
+        // CONSTRUCTION DE LA RÉPONSE CLIENT (allégée)
+        // ============================================
+        List<RagResponse.SimpleSource> simpleSources = relevantChunks.stream()
+            .map(chunk -> RagResponse.SimpleSource.builder()
+                .documentTitle(chunk.getDocumentTitle())  // Juste le nom du fichier
+                .source(chunk.getSource())                 // Juste le nom du fichier
                 .build())
+            .distinct()  // Éviter les doublons si plusieurs chunks du même fichier
             .collect(Collectors.toList());
+        
+        // ============================================
+        // LOG DÉTAILLÉ (côté serveur uniquement)
+        // ============================================
+        RagLogEntry logEntry = RagLogEntry.builder()
+            .timestamp(LocalDateTime.now())
+            .question(request.getQuestion())
+            .answer(answer)
+            .processingTimeMs(processingTime)
+            .topK(request.getTopK())
+            .chunksUsed(relevantChunks.stream()
+                .map(chunk -> RagLogEntry.ChunkDetail.builder()
+                    .chunkIndex(chunk.getChunkIndex())
+                    .documentTitle(chunk.getDocumentTitle())
+                    .content(chunk.getContent())
+                    .source(chunk.getSource())
+                    .build())
+                .collect(Collectors.toList()))
+            .build();
+        
+        // Écrire dans le log (fichier)
+        writeToLogFile(logEntry);
+        
+        // Log dans la console aussi
+        log.debug("Détails RAG - Question: {}, Chunks utilisés: {}, Temps: {}ms", 
+            request.getQuestion(), relevantChunks.size(), processingTime);
         
         return RagResponse.builder()
             .answer(answer)
-            .sources(sources)
+            .sources(simpleSources)
             .processingTimeMs(processingTime)
             .build();
     }
     
+    /**
+     * Construit le contexte à partir des chunks pour le prompt.
+     */
     private String buildContext(List<DocumentChunk> chunks) {
         StringBuilder context = new StringBuilder();
         for (int i = 0; i < chunks.size(); i++) {
             DocumentChunk chunk = chunks.get(i);
-            context.append("--- Document ").append(i + 1).append(" ---\n");
-            context.append("Titre: ").append(chunk.getDocumentTitle()).append("\n");
+            context.append("--- Extrait ").append(i + 1).append(" ---\n");
             context.append("Source: ").append(chunk.getSource()).append("\n");
             context.append("Contenu: ").append(chunk.getContent()).append("\n\n");
         }
         return context.toString();
+    }
+    
+    /**
+     * Écrit les détails dans un fichier log.
+     * Le client ne voit JAMAIS ce fichier.
+     */
+    private void writeToLogFile(RagLogEntry entry) {
+        // Format du log : JSON pour faciliter l'analyse
+        String logLine = String.format(
+            "[%s] QUESTION: \"%s\" | CHUNKS: %d | TEMPS: %dms | TOPK: %d%n" +
+            "CHUNKS_DETAILS: %s%n" +
+            "REPONSE: \"%s\"%n" +
+            "---%n",
+            entry.getTimestamp(),
+            entry.getQuestion().replace("\"", "\\\""),
+            entry.getChunksUsed().size(),
+            entry.getProcessingTimeMs(),
+            entry.getTopK(),
+            entry.getChunksUsed().stream()
+                .map(c -> String.format("[Chunk#%d] %s: %.100s...", 
+                    c.getChunkIndex(), c.getSource(), c.getContent()))
+                .collect(Collectors.joining(" | ")),
+            entry.getAnswer().replace("\n", " ").substring(0, Math.min(200, entry.getAnswer().length()))
+        );
+        
+        // Écrire dans le fichier (append)
+        try {
+            java.nio.file.Files.writeString(
+                java.nio.file.Path.of("rag-queries.log"),
+                logLine,
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.APPEND
+            );
+        } catch (Exception e) {
+            log.error("Impossible d'écrire dans le fichier log", e);
+        }
     }
 }

@@ -8,7 +8,8 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * DTO pour la réponse du RAG
+ * Réponse RAG envoyée au CLIENT.
+ * Version allégée sans détails techniques.
  */
 @Data
 @Builder
@@ -18,23 +19,21 @@ public class RagResponse {
     // Réponse générée par l'IA
     private String answer;
     
-    // Sources utilisées pour générer la réponse
-    private List<Source> sources;
+    // Sources simplifiées (juste le nom du fichier)
+    private List<SimpleSource> sources;
     
-    // Temps de traitement en ms
+    // Temps de traitement
     private long processingTimeMs;
     
     /**
-     * Représente une source documentaire
+     * Source simplifiée pour l'affichage client.
      */
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class Source {
-        private String documentTitle;
-        private String content;
-        private String source;
-        private double relevanceScore;
+    public static class SimpleSource {
+        private String documentTitle;  // Nom du fichier uniquement
+        private String source;         // Nom du fichier
     }
 }

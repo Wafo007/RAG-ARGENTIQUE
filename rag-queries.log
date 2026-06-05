@@ -1,0 +1,22 @@
+[2026-06-05T01:20:31.374001200] QUESTION: "svm" | CHUNKS: 5 | TEMPS: 12434ms | TOPK: 5
+CHUNKS_DETAILS: [Chunk#56] Classification_SVM.pdf: de Support (mvs) trouve un optimum global.                                                          ... | [Chunk#51] Classification_SVM.pdf: CHAPITRE               2                                                                            ... | [Chunk#8] Classification_SVM.pdf: Ce   mémoire     traite   de  la classifcation        et  de   la  régression      par    Machines  ... | [Chunk#37] Classification_SVM.pdf: 6.4    SVM (classifcation) vs SVR (régression) – diférences clés                    . .  . . .  . . ... | [Chunk#57] Classification_SVM.pdf: )                                                                                                   ...
+REPONSE: "D'après le contexte fourni, les **Machines à Vecteurs de Support (SVM)** sont :  - Une **famille d'algorithmes d'apprentissage supervisé** basée sur la **théorie statistique de Vapnik-Chervonenkis**. "
+---
+[2026-06-05T01:20:48.365690600] QUESTION: "svm" | CHUNKS: 5 | TEMPS: 3742ms | TOPK: 5
+CHUNKS_DETAILS: [Chunk#56] Classification_SVM.pdf: de Support (mvs) trouve un optimum global.                                                          ... | [Chunk#51] Classification_SVM.pdf: CHAPITRE               2                                                                            ... | [Chunk#8] Classification_SVM.pdf: Ce   mémoire     traite   de  la classifcation        et  de   la  régression      par    Machines  ... | [Chunk#37] Classification_SVM.pdf: 6.4    SVM (classifcation) vs SVR (régression) – diférences clés                    . .  . . .  . . ... | [Chunk#57] Classification_SVM.pdf: )                                                                                                   ...
+REPONSE: "D'après le contexte fourni, les **Machines à Vecteurs de Support (SVM)** sont :  - Un ensemble de **techniques d'apprentissage supervisé** utilisées pour :   1. **La classification** : attribuer un éc"
+---
+[2026-06-05T01:32:28.479119400] QUESTION: "svm" | CHUNKS: 5 | TEMPS: 6892ms | TOPK: 5
+CHUNKS_DETAILS: [Chunk#56] Classification_SVM.pdf: de Support (mvs) trouve un optimum global.                                                          ... | [Chunk#51] Classification_SVM.pdf: CHAPITRE               2                                                                            ... | [Chunk#8] Classification_SVM.pdf: Ce   mémoire     traite   de  la classifcation        et  de   la  régression      par    Machines  ... | [Chunk#37] Classification_SVM.pdf: 6.4    SVM (classifcation) vs SVR (régression) – diférences clés                    . .  . . .  . . ... | [Chunk#57] Classification_SVM.pdf: )                                                                                                   ...
+REPONSE: "Les **Machines à Vecteurs de Support (SVM)** sont des techniques d'**apprentissage supervisé** utilisées pour résoudre deux types de problèmes principaux :  1. **La classification** : permettre de dét"
+---
+[2026-06-05T02:01:53.170884200] QUESTION: "Presente moi le projet du cervarent" | CHUNKS: 5 | TEMPS: 19003ms | TOPK: 5
+CHUNKS_DETAILS: [Chunk#0] Presentation Projet cervarent pour les étudiants.docx: Présentation du projet CERVARENT
+Pour le compte de l’UV projet IN4 de certains étudiants de IN4-IA
+1... | [Chunk#2] Presentation Projet cervarent pour les étudiants.docx: structurée qui sera préalablement présentée puis assez scrupuleusement respectée par la suite pour p... | [Chunk#13] GUIDE ÉTHIQUE DU CERVARENT.docx: tiliser que pour les objectifs du projet de recherche autorisé.
+Partage des données : Ne transmettre... | [Chunk#2] GUIDE ÉTHIQUE DU CERVARENT.docx: Universitaire de Technologie Fotso Victor de Bandjoun
+Rapporteur : Directeur du CERVARENT
+Membres : ... | [Chunk#0] GUIDE ÉTHIQUE DU CERVARENT.docx: GUIDE ÉTHIQUE DU CERVARENT_2025
+Centre d'Étude, de Recherche et de Valorisation des Ressources Natur...
+REPONSE: "Le projet du **CERVARENT** (Centre d’Etude, de Recherche et de valorisation des Ressources Naturelles et des Technologies) vise à créer un **site web dynamique et sécurisé** pour renforcer sa visibili"
+---

@@ -1,30 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
          https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    
+
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.3.0</version>
         <relativePath/>
     </parent>
-    
+
     <groupId>com.Cervarent</groupId>
     <artifactId>RAG</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>RAG</name>
     <description>RAG avec Mistral AI</description>
-    
+
     <properties>
         <java.version>17</java.version>
         <!-- Version Spring AI stable -->
         <spring-ai.version>1.0.0-M2</spring-ai.version>
         <springdoc.version>2.5.0</springdoc.version>
     </properties>
-    
+
     <!-- DÉPÔTS REQUIS -->
     <repositories>
         <repository>
@@ -96,6 +95,15 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- ============================================ -->
+        <!-- APACHE POI - Lecture fichiers DOCX           -->
+        <!-- ============================================ -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -108,6 +116,13 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <jvmArguments>-Xmx4g</jvmArguments>
+                </configuration>
             </plugin>
         </plugins>
     </build>
