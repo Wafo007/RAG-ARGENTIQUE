@@ -1,0 +1,121 @@
+/* ============================================================
+   DESIGN TOKENS — CERVARENT
+   Palette extraite de la maquette fournie :
+   - Vert principal (boutons, accents, liens actifs) : #16A34A / #22C55E
+   - Fond sombre du panneau "Recherche IA"             : #0E1F22 -> #142C30 (dégradé)
+   - Fond clair général (page, cartes)                 : #F6F8F7
+   - Texte sombre principal                            : #0F1B1E
+   - Texte gris secondaire                             : #6B7B7A
+   - Bordures discrètes                                : #E4EAE8
+   ============================================================ */
+
+:root {
+  /* Couleurs de marque */
+  --color-primary: #16a34a;
+  --color-primary-light: #22c55e;
+  --color-primary-dark: #0f7a37;
+
+  /* Fond sombre (section "Recherche augmentée par IA") */
+  --color-dark-bg: #0e1f22;
+  --color-dark-bg-end: #15323a;
+  --color-dark-border: #25434a;
+
+  /* Neutres clairs */
+  --color-bg: #f6f8f7;
+  --color-surface: #ffffff;
+  --color-border: #e4eae8;
+
+  /* Texte */
+  --color-text: #0f1b1e;
+  --color-text-muted: #6b7b7a;
+  --color-text-inverse: #f4f7f6;
+  --color-text-inverse-muted: #aebfbe;
+
+  /* États */
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+
+  /* Typographie */
+  --font-display: 'Sora', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  /* Rayons & ombres */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --shadow-soft: 0 4px 24px rgba(15, 27, 30, 0.06);
+  --shadow-card: 0 8px 30px rgba(15, 27, 30, 0.08);
+
+  /* Largeur de la barre latérale */
+  --sidebar-width: 260px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  margin: 0;
+  line-height: 1.15;
+}
+
+p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input, textarea {
+  font-family: var(--font-body);
+}
+
+/* Visible focus ring pour l'accessibilité au clavier */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Scrollbar discrète */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 8px;
+}
+
+/* Réduction des animations pour les utilisateurs qui le demandent */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
