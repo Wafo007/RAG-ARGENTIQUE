@@ -50,6 +50,47 @@
   --sidebar-width: 260px;
 }
 
+/* ============================================================
+   MODE SOMBRE
+   On NE redéfinit PAS --color-dark-bg / --color-dark-bg-end /
+   --color-dark-border / --color-text-inverse / --color-text-inverse-muted :
+   ce sont des tokens "fixes" déjà utilisés par le panneau "Recherche IA"
+   (RagSearchPanel.css), qui doit rester visuellement identique quel que
+   soit le thème du site. On les RÉUTILISE simplement comme base du thème
+   sombre global, au lieu d'inventer une nouvelle palette : la palette du
+   produit reste unique, qu'on soit en clair ou en sombre.
+
+   L'attribut data-theme="dark" est posé sur <html> par ThemeProvider
+   (voir src/context/ThemeContext.tsx). Comme tous les composants du projet
+   consomment déjà --color-bg / --color-surface / --color-text... plutôt que
+   des couleurs codées en dur, cette seule section suffit à transformer
+   l'intégralité du site (Navbar, pages, chat...) sans toucher à un seul
+   autre fichier CSS.
+   ============================================================ */
+:root[data-theme='dark'] {
+  --color-bg: var(--color-dark-bg);
+  --color-surface: var(--color-dark-bg-end);
+  --color-border: var(--color-dark-border);
+  --color-text: var(--color-text-inverse);
+  --color-text-muted: var(--color-text-inverse-muted);
+
+  /* Sur fond sombre, une ombre noire classique devient invisible :
+     on l'éclaircit légèrement pour conserver une impression de profondeur. */
+  --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* Transition douce lors du basculement clair/sombre, plutôt qu'un changement
+   brutal de couleurs. Désactivée automatiquement par la règle
+   prefers-reduced-motion plus bas, comme le reste des animations du site. */
+body,
+.navbar,
+.conv-sidebar,
+.chat-window,
+.chat-composer {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
 * {
   box-sizing: border-box;
 }

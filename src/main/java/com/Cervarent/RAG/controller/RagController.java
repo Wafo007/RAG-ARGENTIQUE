@@ -16,6 +16,10 @@ import com.Cervarent.RAG.entity.DocumentChunk;
 import com.Cervarent.RAG.service.DocumentService;
 import com.Cervarent.RAG.service.RagService;
 
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
+import reactor.core.publisher.Flux;
+
 import org.springframework.web.multipart.MultipartFile;
 import com.Cervarent.RAG.dto.UploadResponse;
 import com.Cervarent.RAG.service.FileUploadService;
@@ -114,6 +118,23 @@ public class RagController {
     public ResponseEntity<RagResponse> askQuestion(@RequestBody QuestionRequest request) {
         RagResponse response = ragService.answerQuestion(request);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Pose une question au système RAG, avec réponse en streaming (Server-Sent Events).
+     *
+     * Contrairement à /ask qui attend la réponse complète avant de répondre,
+     * cet endpoint envoie la réponse au fur et à mesure qu'elle est générée,
+     * via 4 types d'évènements SSE : "sources", "chunk" (répété), "done", "error".
+     *
+     * Le frontend lit ce flux avec fetch() + un ReadableStream manuel plutôt que
+     * l'API EventSource native du navigateur, car EventSource ne permet pas
+     * d'envoyer un corps de requête POST (nécessaire ici pour transmettre la
+     * question, le topK et l'historique de conversation).
+     */
+    @PostMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<Object>> askQuestionStream(@RequestBody QuestionRequest request) {
+        return ragService.streamAnswer(request);
     }
 
     /**

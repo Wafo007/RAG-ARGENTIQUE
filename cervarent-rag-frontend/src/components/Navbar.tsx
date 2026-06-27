@@ -1,12 +1,13 @@
-import { Leaf, LogIn } from 'lucide-react';
+import { Leaf, LogIn, Moon, Sun } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useTheme } from '../context/ThemeContext';
 import './Navbar.css';
 
 /**
  * Barre de navigation principale (en haut de page).
  *
  * Reprend l'identité visuelle CERVARENT : logo + nom du centre à gauche,
- * liens de navigation au centre, bouton "Se connecter" à droite.
+ * liens de navigation au centre, bouton mode sombre + "Se connecter" à droite.
  */
 const NAV_LINKS = [
   { label: 'Accueil', to: '/' },
@@ -18,6 +19,8 @@ const NAV_LINKS = [
 ];
 
 export default function Navbar() {
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <header className="navbar">
       <div className="navbar__brand">
@@ -44,10 +47,22 @@ export default function Navbar() {
         ))}
       </nav>
 
-      <button className="navbar__login" type="button">
-        <LogIn size={16} />
-        Se connecter
-      </button>
+      <div className="navbar__actions">
+        <button
+          type="button"
+          className="navbar__theme-toggle"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
+          title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
+        <button className="navbar__login" type="button">
+          <LogIn size={16} />
+          Se connecter
+        </button>
+      </div>
     </header>
   );
 }

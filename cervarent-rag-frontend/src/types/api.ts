@@ -6,10 +6,18 @@
  * dus à des champs renommés ou manquants.
  */
 
+/** Un tour déjà échangé dans la conversation (envoyé pour donner une mémoire à l'IA) */
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 /** Correspond à QuestionRequest.java */
 export interface QuestionRequest {
   question: string;
   topK?: number;
+  /** Historique de la conversation, du plus ancien au plus récent (sans la question actuelle) */
+  history?: ChatTurn[];
 }
 
 /** Correspond à RagResponse.SimpleSource (sous-objet de RagResponse.java) */

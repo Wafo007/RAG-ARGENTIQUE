@@ -1,0 +1,20 @@
+.rag-search-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.rag-search-page__body {
+  flex: 1;
+  display: flex;
+  min-height: 0; /* indispensable pour que les enfants en colonne (chat-window) puissent scroller correctement */
+}
+
+.rag-search-page__loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
