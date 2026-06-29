@@ -1,0 +1,42 @@
+.placeholder {
+  max-width: 480px;
+  margin: 60px auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.placeholder__icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(22, 163, 74, 0.1);
+  color: var(--color-primary-dark);
+}
+
+.placeholder h1 {
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.placeholder p {
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+.placeholder__tag {
+  margin-top: 4px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
