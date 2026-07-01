@@ -17,7 +17,7 @@ import com.Cervarent.RAG.dto.ChatTurn;
 import com.Cervarent.RAG.dto.QuestionRequest;
 import com.Cervarent.RAG.dto.RagResponse;
 import com.Cervarent.RAG.dto.RagLogEntry;
-import com.Cervarent.RAG.entity.DocumentChunk;
+import com.Cervarent.RAG.dto.SimilarChunkProjection;
 import com.Cervarent.RAG.repository.DocumentRepository;
 
 import java.time.LocalDateTime;
@@ -38,34 +38,35 @@ public class RagService {
     // MistralAiChatModel défini dans AiConfig), qui implémente les deux
     // interfaces. ChatModel sert à la version classique (answerQuestion),
     // StreamingChatModel sert à la version streamée (streamAnswer).
+
     private final ChatModel chatModel;
     private final StreamingChatModel streamingChatModel;
 
-    /** Nombre maximum de tours d'historique envoyés au modèle (3 questions + 3 réponses).
-     *  Limite volontaire : plus l'historique est long, plus le prompt est gros,
-     *  ce qui augmente le coût et la latence de chaque appel à l'IA. */
+    /**
+     * Nombre maximum de tours d'historique envoyés au modèle (3 questions + 3
+     * réponses).
+     * Limite volontaire : plus l'historique est long, plus le prompt est gros,
+     * ce qui augmente le coût et la latence de chaque appel à l'IA.
+     */
     private static final int MAX_HISTORY_TURNS = 6;
 
     // ============================================================
     // VERSION CLASSIQUE (réponse complète d'un seul bloc)
     // ============================================================
 
-    /**
-     * Répond à une question en utilisant le RAG (réponse complète, non streamée).
-     */
     public RagResponse answerQuestion(QuestionRequest request) {
         long startTime = System.currentTimeMillis();
         log.info("Traitement de la question: {}", request.getQuestion());
 
-        List<DocumentChunk> relevantChunks = searchRelevantChunks(request);
+        List<SimilarChunkProjection> relevantChunks = searchRelevantChunks(request);
         log.info("{} documents pertinents trouvés", relevantChunks.size());
 
         if (relevantChunks.isEmpty()) {
             return RagResponse.builder()
-                .answer("Je n'ai trouvé aucun document pertinent pour répondre à cette question.")
-                .sources(List.of())
-                .processingTimeMs(System.currentTimeMillis() - startTime)
-                .build();
+                    .answer("Je n'ai trouvé aucun document pertinent pour répondre à cette question.")
+                    .sources(List.of())
+                    .processingTimeMs(System.currentTimeMillis() - startTime)
+                    .build();
         }
 
         String context = buildContext(relevantChunks);
@@ -82,12 +83,15 @@ public class RagService {
         logQuery(request, answer, processingTime, relevantChunks);
 
         return RagResponse.builder()
-            .answer(answer)
-            .sources(simpleSources)
-            .processingTimeMs(processingTime)
-            .build();
+                .answer(answer)
+                .sources(simpleSources)
+                .processingTimeMs(processingTime)
+                .build();
     }
 
+    // ============================================================
+    // VERSION STREAMING — Server-Sent Events
+    // ============================================================
     // ============================================================
     // VERSION STREAMING (phase 3) — Server-Sent Events
     // ============================================================
@@ -96,10 +100,11 @@ public class RagService {
      * Répond à une question en streaming : la réponse est envoyée fragment par
      * fragment au fur et à mesure de sa génération par l'IA, via 4 types
      * d'évènements SSE :
-     * - "sources" : la liste des documents utilisés (envoyée en premier, en un seul évènement)
-     * - "chunk"   : un fragment de texte de la réponse (envoyé plusieurs fois)
-     * - "done"    : signale la fin du flux, avec le temps de traitement total
-     * - "error"   : en cas de problème pendant la recherche ou la génération
+     * - "sources" : la liste des documents utilisés (envoyée en premier, en un seul
+     * évènement)
+     * - "chunk" : un fragment de texte de la réponse (envoyé plusieurs fois)
+     * - "done" : signale la fin du flux, avec le temps de traitement total
+     * - "error" : en cas de problème pendant la recherche ou la génération
      *
      * Important : la recherche de documents pertinents (embedding + requête
      * pgvector) reste un appel BLOQUANT classique, exécuté avant de construire
@@ -111,7 +116,7 @@ public class RagService {
         long startTime = System.currentTimeMillis();
         log.info("Traitement (streaming) de la question: {}", request.getQuestion());
 
-        final List<DocumentChunk> relevantChunks;
+        final List<SimilarChunkProjection> relevantChunks;
         try {
             relevantChunks = searchRelevantChunks(request);
         } catch (Exception e) {
@@ -124,10 +129,9 @@ public class RagService {
         if (relevantChunks.isEmpty()) {
             long processingTime = System.currentTimeMillis() - startTime;
             return Flux.just(
-                sourcesEvent(List.of()),
-                chunkEvent("Je n'ai trouvé aucun document pertinent pour répondre à cette question."),
-                doneEvent(processingTime)
-            );
+                    sourcesEvent(List.of()),
+                    chunkEvent("Je n'ai trouvé aucun document pertinent pour répondre à cette question."),
+                    doneEvent(processingTime));
         }
 
         String context = buildContext(relevantChunks);
@@ -140,24 +144,19 @@ public class RagService {
         StringBuilder fullAnswer = new StringBuilder();
 
         Flux<ServerSentEvent<Object>> sourceEvent = Flux.just(sourcesEvent(simpleSources));
-
+        // Chaque ChatResponse représente UN fragment de la réponse (pas la
+        // réponse cumulée) pour la plupart des providers Spring AI, dont
+        // Mistral. Si jamais ce n'était pas le cas avec ta version exacte
+        // (réponse qui se répète/se duplique côté frontend), il suffirait
+        // de calculer le delta soi-même en gardant le texte précédent.
         Flux<ServerSentEvent<Object>> answerChunks = streamingChatModel.stream(new Prompt(messages))
-            // Chaque ChatResponse représente UN fragment de la réponse (pas la
-            // réponse cumulée) pour la plupart des providers Spring AI, dont
-            // Mistral. Si jamais ce n'était pas le cas avec ta version exacte
-            // (réponse qui se répète/se duplique côté frontend), il suffirait
-            // de calculer le delta soi-même en gardant le texte précédent.
-            .map(chatResponse -> chatResponse.getResult() == null || chatResponse.getResult().getOutput() == null
-                ? ""
-                : chatResponse.getResult().getOutput().getContent())
-            .filter(delta -> delta != null && !delta.isEmpty())
-            .doOnNext(fullAnswer::append)
-            .map(this::chunkEvent);
+                .map(chatResponse -> chatResponse.getResult() == null || chatResponse.getResult().getOutput() == null
+                        ? ""
+                        : chatResponse.getResult().getOutput().getContent())
+                .filter(delta -> delta != null && !delta.isEmpty())
+                .doOnNext(fullAnswer::append)
+                .map(this::chunkEvent);
 
-        // Flux.defer() : le contenu n'est calculé qu'au moment où ce Flux est
-        // réellement consommé (donc APRÈS que answerChunks soit terminé et que
-        // fullAnswer contienne le texte complet) — indispensable pour logguer
-        // la bonne valeur de processingTime et de la réponse complète.
         Flux<ServerSentEvent<Object>> finalEvent = Flux.defer(() -> {
             long processingTime = System.currentTimeMillis() - startTime;
             logQuery(request, fullAnswer.toString(), processingTime, relevantChunks);
@@ -165,49 +164,196 @@ public class RagService {
         });
 
         return Flux.concat(sourceEvent, answerChunks, finalEvent)
-            .onErrorResume(ex -> {
-                log.error("Erreur pendant le streaming de la réponse IA", ex);
-                return Flux.just(errorEvent("Une erreur est survenue pendant la génération de la réponse."));
-            });
+                .onErrorResume(ex -> {
+                    log.error("Erreur pendant le streaming de la réponse IA", ex);
+                    return Flux.just(errorEvent("Une erreur est survenue pendant la génération de la réponse."));
+                });
     }
 
     // ============================================================
-    // LOGIQUE PARTAGÉE entre les deux versions (DRY)
+    // LOGIQUE PARTAGÉE
     // ============================================================
 
-    /** Étapes 1 et 2 communes : vectoriser la question puis chercher les chunks similaires */
-    private List<DocumentChunk> searchRelevantChunks(QuestionRequest request) {
+    private List<SimilarChunkProjection> searchRelevantChunks(QuestionRequest request) {
         List<Float> questionEmbedding = embeddingService.embed(request.getQuestion());
         String embeddingString = embeddingService.embeddingToString(questionEmbedding);
-        return documentRepository.findSimilarDocuments(embeddingString, request.getTopK());
+        return documentRepository.findSimilarDocumentsWithScore(embeddingString, request.getTopK());
     }
 
-    /**
-     * Construit la liste de messages envoyée au modèle : le prompt système
-     * (avec le contexte documentaire), puis l'historique de la conversation
-     * (limité à MAX_HISTORY_TURNS), puis la question actuelle.
-     *
-     * C'est ICI que la mémoire conversationnelle de la phase 3 est branchée :
-     * avant, seul un SystemMessage + la question actuelle étaient envoyés.
-     */
     private List<Message> buildMessages(QuestionRequest request, String context) {
+
         String systemPrompt = """
-            Tu es un assistant intelligent qui répond aux questions en te basant UNIQUEMENT
-            sur les documents fournis dans le contexte ci-dessous, et sur l'historique de la
-            conversation pour comprendre le fil des échanges (ex: une question de relance
-            comme "et pour les autres axes ?" qui se réfère à un message précédent).
+                Tu es **CERVARENT AI**, l'assistant intelligent officiel de la plateforme CERVARENT (Centre d'Études, de Recherche et de Valorisation) conçu par Entreprise WAFORA.
 
-            Règles :
-            - Réponds uniquement avec les informations du contexte documentaire
-            - Si tu ne trouves pas la réponse, dis-le honnêtement
-            - Sois concis mais complet
-            - Ne mentionne PAS les numéros de chunks ou de documents internes
-            - Cite les sources de manière générale (ex: "selon le document sur les SVM")
+                Tu accompagnes les chercheurs, enseignants, doctorants, étudiants et administrateurs dans la recherche, l'analyse et la compréhension des informations disponibles sur la plateforme.
 
-            Contexte des documents :
-            %s
-            """.formatted(context);
+                Tu es reconnu pour être fiable, professionnel, pédagogique et agréable à utiliser.
 
+                ══════════════════════════════════════════════
+                🎯 TA MISSION
+                ══════════════════════════════════════════════
+
+                Ton objectif est d'aider l'utilisateur à obtenir rapidement une réponse claire en exploitant les connaissances disponibles dans la base documentaire et les données indexées.
+
+                Tu ne cherches pas simplement à répondre.
+
+                Tu cherches à faire gagner du temps à l'utilisateur.
+
+                Tes réponses doivent donner l'impression d'échanger avec un véritable expert de CERVARENT.
+
+                ══════════════════════════════════════════════
+                📚 CONNAISSANCES
+                ══════════════════════════════════════════════
+
+                Tu utilises exclusivement :
+
+                • les documents indexés
+
+                • les données structurées indexées
+
+                • le contexte fourni
+
+                Tu n'utilises jamais tes connaissances personnelles.
+
+                Tu n'inventes jamais une information.
+
+                ══════════════════════════════════════════════
+                🧠 HISTORIQUE
+                ══════════════════════════════════════════════
+
+                Tu utilises l'historique uniquement pour comprendre le contexte de la conversation.
+
+                Exemples :
+
+                "continue"
+
+                "les autres"
+
+                "et concernant celui-ci ?"
+
+                "peux-tu développer ?"
+
+                Les informations doivent toujours provenir du contexte documentaire.
+
+                ══════════════════════════════════════════════
+                💬 STYLE DE COMMUNICATION
+                ══════════════════════════════════════════════
+
+                Réponds naturellement.
+
+                Écris comme un expert humain.
+
+                Sois chaleureux sans être familier.
+
+                Sois précis sans être lourd.
+
+                Explique les notions complexes simplement.
+
+                Évite les phrases robotiques.
+
+                Ne commence jamais systématiquement par :
+
+                "Selon le contexte..."
+
+                Varie naturellement tes formulations.
+
+                ══════════════════════════════════════════════
+                📖 STRUCTURE DES RÉPONSES
+                ══════════════════════════════════════════════
+
+                Lorsque cela est pertinent :
+
+                • commence par répondre directement à la question
+
+                • ajoute ensuite les explications utiles
+
+                • termine par une courte synthèse
+
+                Utilise :
+
+                - des paragraphes
+                - des listes
+                - des tableaux
+
+                si cela améliore la compréhension.
+
+                ══════════════════════════════════════════════
+                🔍 EN CAS D'ABSENCE D'INFORMATION
+                ══════════════════════════════════════════════
+
+                N'invente jamais.
+
+                Réponds par exemple :
+
+                "Je n'ai trouvé aucune information répondant précisément à cette question dans les documents actuellement indexés."
+
+                Si la question est proche d'un sujet existant, indique-le.
+
+                ══════════════════════════════════════════════
+                ⚠ GESTION DES CONTRADICTIONS
+                ══════════════════════════════════════════════
+
+                Si plusieurs documents présentent des informations différentes :
+
+                • indique clairement cette divergence
+
+                • explique les différences
+
+                • ne choisis jamais arbitrairement un document.
+
+                ══════════════════════════════════════════════
+                📄 SOURCES
+                ══════════════════════════════════════════════
+
+                Lorsque tu t'appuies sur des documents :
+
+                cite-les naturellement.
+
+                Exemples :
+
+                "D'après le rapport..."
+
+                "Les publications disponibles indiquent..."
+
+                "Le document consacré à..."
+
+                Ne parle jamais de :
+
+                - chunks
+
+                - embeddings
+
+                - vecteurs
+
+                - score
+
+                - récupération documentaire
+
+                Ces notions sont internes.
+
+                ══════════════════════════════════════════════
+                ✨ QUALITÉ
+                ══════════════════════════════════════════════
+
+                Avant de répondre :
+
+                ✔ vérifie que la réponse est entièrement fondée sur le contexte.
+
+                ✔ supprime toute répétition inutile.
+
+                ✔ assure-toi que la réponse est claire.
+
+                ✔ adapte automatiquement le niveau de détail.
+
+                ✔ privilégie toujours la qualité plutôt que la quantité.
+
+                ══════════════════════════════════════════════
+                📄 CONTEXTE DOCUMENTAIRE
+                ══════════════════════════════════════════════
+
+                %s
+                """
+                .formatted(context);
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(systemPrompt));
 
@@ -225,11 +371,10 @@ public class RagService {
         return messages;
     }
 
-    /** Construit le contexte à partir des chunks pour le prompt. */
-    private String buildContext(List<DocumentChunk> chunks) {
+    private String buildContext(List<SimilarChunkProjection> chunks) {
         StringBuilder context = new StringBuilder();
         for (int i = 0; i < chunks.size(); i++) {
-            DocumentChunk chunk = chunks.get(i);
+            SimilarChunkProjection chunk = chunks.get(i);
             context.append("--- Extrait ").append(i + 1).append(" ---\n");
             context.append("Source: ").append(chunk.getSource()).append("\n");
             context.append("Contenu: ").append(chunk.getContent()).append("\n\n");
@@ -237,75 +382,89 @@ public class RagService {
         return context.toString();
     }
 
-    /** Transforme les chunks bruts en sources allégées pour le client (sans doublons) */
-    private List<RagResponse.SimpleSource> toSimpleSources(List<DocumentChunk> chunks) {
+    /**
+     * Transforme les chunks bruts (avec leur distance pgvector) en sources
+     * enrichies pour le client : extrait du texte + score de pertinence.
+     *
+     * Chaque chunk devient sa propre source (même si deux chunks viennent du
+     * même fichier) : avant cet ajout, on dédupliquait par nom de fichier
+     * (.distinct()), ce qui faisait perdre l'info "quel passage exact a été
+     * utilisé". Maintenant qu'on affiche l'extrait individuel de chaque
+     * chunk, les regrouper n'aurait plus de sens.
+     *
+     * Le score est calculé comme (1 - distance) car l'opérateur pgvector
+     * "<=>" renvoie une DISTANCE cosinus (0 = identique), alors qu'on veut
+     * afficher une SIMILARITÉ/pertinence (1 = identique) — c'est l'inverse.
+     */
+    private List<RagResponse.SimpleSource> toSimpleSources(List<SimilarChunkProjection> chunks) {
         return chunks.stream()
-            .map(chunk -> RagResponse.SimpleSource.builder()
-                .documentTitle(chunk.getDocumentTitle())
-                .source(chunk.getSource())
-                .build())
-            .distinct()
-            .collect(Collectors.toList());
+                .map(chunk -> RagResponse.SimpleSource.builder()
+                        .documentTitle(chunk.getDocumentTitle())
+                        .source(chunk.getSource())
+                        .excerpt(chunk.getContent())
+                        .relevanceScore(clampScore(1 - chunk.getDistance()))
+                        .build())
+                .collect(Collectors.toList());
     }
 
-    /** Construit l'entrée de log détaillée et l'écrit dans le fichier (côté serveur uniquement) */
-    private void logQuery(QuestionRequest request, String answer, long processingTime, List<DocumentChunk> relevantChunks) {
+    /**
+     * Protège contre un score hors de [0,1], qui pourrait théoriquement survenir
+     * avec des vecteurs atypiques
+     */
+    private double clampScore(double value) {
+        return Math.max(0.0, Math.min(1.0, value));
+    }
+
+    private void logQuery(QuestionRequest request, String answer, long processingTime,
+            List<SimilarChunkProjection> relevantChunks) {
         RagLogEntry logEntry = RagLogEntry.builder()
-            .timestamp(LocalDateTime.now())
-            .question(request.getQuestion())
-            .answer(answer)
-            .processingTimeMs(processingTime)
-            .topK(request.getTopK())
-            .chunksUsed(relevantChunks.stream()
-                .map(chunk -> RagLogEntry.ChunkDetail.builder()
-                    .chunkIndex(chunk.getChunkIndex())
-                    .documentTitle(chunk.getDocumentTitle())
-                    .content(chunk.getContent())
-                    .source(chunk.getSource())
-                    .build())
-                .collect(Collectors.toList()))
-            .build();
+                .timestamp(LocalDateTime.now())
+                .question(request.getQuestion())
+                .answer(answer)
+                .processingTimeMs(processingTime)
+                .topK(request.getTopK())
+                .chunksUsed(relevantChunks.stream()
+                        .map(chunk -> RagLogEntry.ChunkDetail.builder()
+                                .chunkIndex(chunk.getChunkIndex())
+                                .documentTitle(chunk.getDocumentTitle())
+                                .content(chunk.getContent())
+                                .source(chunk.getSource())
+                                .build())
+                        .collect(Collectors.toList()))
+                .build();
 
         writeToLogFile(logEntry);
         log.debug("Détails RAG - Question: {}, Chunks utilisés: {}, Temps: {}ms",
-            request.getQuestion(), relevantChunks.size(), processingTime);
+                request.getQuestion(), relevantChunks.size(), processingTime);
     }
 
-    /** Écrit les détails dans un fichier log. Le client ne voit JAMAIS ce fichier. */
     private void writeToLogFile(RagLogEntry entry) {
         String logLine = String.format(
-            "[%s] QUESTION: \"%s\" | CHUNKS: %d | TEMPS: %dms | TOPK: %d%n" +
-            "CHUNKS_DETAILS: %s%n" +
-            "REPONSE: \"%s\"%n" +
-            "---%n",
-            entry.getTimestamp(),
-            entry.getQuestion().replace("\"", "\\\""),
-            entry.getChunksUsed().size(),
-            entry.getProcessingTimeMs(),
-            entry.getTopK(),
-            entry.getChunksUsed().stream()
-                .map(c -> String.format("[Chunk#%d] %s: %.100s...",
-                    c.getChunkIndex(), c.getSource(), c.getContent()))
-                .collect(Collectors.joining(" | ")),
-            entry.getAnswer().replace("\n", " ").substring(0, Math.min(200, entry.getAnswer().length()))
-        );
+                "[%s] QUESTION: \"%s\" | CHUNKS: %d | TEMPS: %dms | TOPK: %d%n" +
+                        "CHUNKS_DETAILS: %s%n" +
+                        "REPONSE: \"%s\"%n" +
+                        "---%n",
+                entry.getTimestamp(),
+                entry.getQuestion().replace("\"", "\\\""),
+                entry.getChunksUsed().size(),
+                entry.getProcessingTimeMs(),
+                entry.getTopK(),
+                entry.getChunksUsed().stream()
+                        .map(c -> String.format("[Chunk#%d] %s: %.100s...",
+                                c.getChunkIndex(), c.getSource(), c.getContent()))
+                        .collect(Collectors.joining(" | ")),
+                entry.getAnswer().replace("\n", " ").substring(0, Math.min(200, entry.getAnswer().length())));
 
         try {
             java.nio.file.Files.writeString(
-                java.nio.file.Path.of("rag-queries.log"),
-                logLine,
-                java.nio.file.StandardOpenOption.CREATE,
-                java.nio.file.StandardOpenOption.APPEND
-            );
+                    java.nio.file.Path.of("rag-queries.log"),
+                    logLine,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND);
         } catch (Exception e) {
             log.error("Impossible d'écrire dans le fichier log", e);
         }
     }
-
-    // ============================================================
-    // Constructeurs d'évènements SSE (évite de répéter
-    // ServerSentEvent.builder(...).event(...).build() partout)
-    // ============================================================
 
     private ServerSentEvent<Object> sourcesEvent(List<RagResponse.SimpleSource> sources) {
         return ServerSentEvent.<Object>builder(sources).event("sources").build();

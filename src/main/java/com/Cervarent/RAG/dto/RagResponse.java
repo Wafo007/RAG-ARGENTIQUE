@@ -18,15 +18,15 @@ import java.util.List;
 public class RagResponse {
     // Réponse générée par l'IA
     private String answer;
-    
-    // Sources simplifiées (juste le nom du fichier)
+
+    // Sources enrichies (nom de fichier + extrait + score de pertinence)
     private List<SimpleSource> sources;
-    
+
     // Temps de traitement
     private long processingTimeMs;
-    
+
     /**
-     * Source simplifiée pour l'affichage client.
+     * Source enrichie pour l'affichage client.
      */
     @Data
     @Builder
@@ -35,5 +35,20 @@ public class RagResponse {
     public static class SimpleSource {
         private String documentTitle;  // Nom du fichier uniquement
         private String source;         // Nom du fichier
+
+        /**
+         * Extrait du chunk effectivement utilisé pour générer la réponse
+         * (le texte brut indexé). Permet à l'utilisateur de vérifier lui-même
+         * ce que l'IA a "lu" avant de répondre, plutôt que de lui faire
+         * confiance à l'aveugle.
+         */
+        private String excerpt;
+
+        /**
+         * Score de pertinence entre 0 et 1 (1 = très pertinent), calculé à
+         * partir de la distance cosinus pgvector : score = 1 - distance.
+         * Affiché côté client comme un pourcentage ("82% pertinent").
+         */
+        private double relevanceScore;
     }
 }

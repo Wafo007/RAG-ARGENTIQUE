@@ -24,6 +24,10 @@ export interface QuestionRequest {
 export interface SimpleSource {
   documentTitle: string;
   source: string;
+  /** Extrait du chunk effectivement utilisé pour générer la réponse */
+  excerpt: string;
+  /** Score de pertinence entre 0 et 1 (1 = très pertinent) */
+  relevanceScore: number;
 }
 
 /** Correspond à RagResponse.java — réponse renvoyée par POST /api/rag/ask */

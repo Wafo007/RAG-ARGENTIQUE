@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import { Bot, User, FileText, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import type { ChatMessage } from '../../types/conversation';
 import './ChatMessageBubble.css';
+import SourceCard from './SourceCard';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
@@ -84,14 +85,11 @@ export default function ChatMessageBubble({ message, onRegenerate, isRegeneratin
         {!isUser && message.sources && message.sources.length > 0 && (
           <div className="chat-msg__sources">
             <h4>Sources utilisées</h4>
-            <ul>
+            <div className="chat-msg__sources-list">
               {message.sources.map((source, i) => (
-                <li key={`${source.source}-${i}`}>
-                  <FileText size={13} />
-                  <span>{source.documentTitle || source.source}</span>
-                </li>
+                <SourceCard key={`${source.source}-${i}`} source={source} />
               ))}
-            </ul>
+            </div>
           </div>
         )}
       </div>

@@ -1,0 +1,76 @@
+.source-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.source-card__header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  text-align: left;
+}
+
+.source-card__icon {
+  flex-shrink: 0;
+}
+
+.source-card__title {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.source-card__score {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 11.5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+/* Code couleur du score — toujours dérivé des tokens existants
+   (primaire / warning / texte atténué), jamais de nouvelle couleur arbitraire. */
+.source-card--high .source-card__score {
+  color: var(--color-primary-dark);
+  background: color-mix(in srgb, var(--color-primary) 18%, var(--color-surface));
+}
+
+.source-card--medium .source-card__score {
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 18%, var(--color-surface));
+}
+
+.source-card--low .source-card__score {
+  color: var(--color-text-muted);
+  background: var(--color-border);
+}
+
+.source-card__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.source-card__chevron--open {
+  transform: rotate(180deg);
+}
+
+.source-card__excerpt {
+  padding: 8px 10px 10px 32px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  border-top: 1px solid var(--color-border);
+  max-height: 220px;
+  overflow-y: auto;
+}

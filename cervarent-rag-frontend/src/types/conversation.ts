@@ -16,6 +16,8 @@
 export interface ChatSource {
   documentTitle: string;
   source: string;
+  excerpt: string;
+  relevanceScore: number;
 }
 
 /** Un message du chat, posé par l'utilisateur ou généré par l'IA */
