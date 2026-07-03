@@ -102,8 +102,9 @@ export default function MarkdownRenderer({ content, isStreaming }: MarkdownRende
                     className="markdown-code-block__copy"
                     onClick={() => navigator.clipboard.writeText(codeString)}
                     title="Copier le code"
+                    style={{fontSize: '25px'}}
                   >
-                    Copier
+                    📋
                   </button>
                 </div>
                 <SyntaxHighlighter

@@ -74,3 +74,61 @@
   max-height: 220px;
   overflow-y: auto;
 }
+
+/* ---- Bouton de téléchargement ---- */
+.source-card__download {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-right: 2px;
+}
+
+.source-card__download:hover {
+  background: var(--color-border);
+  color: var(--color-primary);
+}
+
+.source-card__download:active {
+  transform: scale(0.92);
+}
+
+/* Tooltip personnalisé au survol (optionnel, plus joli que le title natif) */
+.source-card__download::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.95);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.source-card__download:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+/* Animation de confirmation après téléchargement */
+.source-card__download svg {
+  transition: transform 0.2s ease;
+}
+
+.source-card__download:hover svg {
+  transform: translateY(-1px);
+}
