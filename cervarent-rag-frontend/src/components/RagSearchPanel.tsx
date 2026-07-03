@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { ragApi } from '../services/ragApi';
 import type { RagResponse } from '../types/api';
 import './RagSearchPanel.css';
+import MarkdownRenderer from './MarkdownRenderer';
 
 /** Exemples de questions affichés sous forme de suggestions cliquables */
 const EXAMPLES = [
@@ -116,8 +117,8 @@ export default function RagSearchPanel() {
 
       {result && (
         <div className="rag-panel__result">
-          <div className="rag-panel__answer">
-            <ReactMarkdown>{result.answer}</ReactMarkdown>
+          <div className="rag-panel__answer markdown-body">
+            <MarkdownRenderer content={result.answer} />
           </div>
 
           <div className="rag-panel__meta">

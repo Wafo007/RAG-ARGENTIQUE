@@ -247,3 +247,60 @@
     justify-content: center;
   }
 }
+
+
+
+/* ---- Rendu markdown dans le panneau RAG (fond sombre) ---- */
+.rag-panel__answer.markdown-body {
+  color: var(--color-text-inverse);
+}
+
+.rag-panel__answer .markdown-table-wrapper {
+  border-color: var(--color-dark-border);
+}
+
+.rag-panel__answer thead {
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.rag-panel__answer th,
+.rag-panel__answer td {
+  border-color: var(--color-dark-border);
+  color: var(--color-text-inverse);
+}
+
+.rag-panel__answer tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.rag-panel__answer .markdown-code-block {
+  border-color: var(--color-dark-border);
+}
+
+.rag-panel__answer .markdown-code-block__header {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-dark-border);
+}
+
+.rag-panel__answer .markdown-code-inline {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-primary-light);
+}
+
+.rag-panel__answer .markdown-blockquote {
+  background: rgba(34, 197, 94, 0.08);
+  border-left-color: var(--color-primary-light);
+  color: var(--color-text-inverse-muted);
+}
+
+.rag-panel__answer .markdown-link {
+  color: var(--color-primary-light);
+}
+
+.rag-panel__answer .markdown-heading {
+  color: var(--color-text-inverse);
+}
+
+.rag-panel__answer .markdown-list {
+  color: var(--color-text-inverse);
+}

@@ -3,6 +3,7 @@ import { Bot, User, FileText, Clock, RefreshCw, AlertCircle } from 'lucide-react
 import type { ChatMessage } from '../../types/conversation';
 import './ChatMessageBubble.css';
 import SourceCard from './SourceCard';
+import MarkdownRenderer from '../MarkdownRenderer';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
@@ -54,9 +55,7 @@ export default function ChatMessageBubble({ message, onRegenerate, isRegeneratin
             <span className="chat-msg__cursor" aria-hidden="true" />
           </div>
         ) : (
-          <div className="chat-msg__content">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
-          </div>
+          <MarkdownRenderer content={message.content} isStreaming={false} />
         )}
 
         {!isUser && !message.isError && !message.isStreaming && (
