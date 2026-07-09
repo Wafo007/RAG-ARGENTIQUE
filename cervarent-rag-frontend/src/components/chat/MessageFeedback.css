@@ -1,0 +1,35 @@
+.msg-feedback {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.msg-feedback button {
+  background: transparent;
+  border: 1px solid var(--color-border, #2a2a2e);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--color-text-muted, #9ca3af);
+  display: flex;
+  align-items: center;
+}
+
+.msg-feedback button:hover {
+  background: var(--color-surface-hover, #27272a);
+  color: inherit;
+}
+
+.msg-feedback button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.msg-feedback--done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #22c55e;
+  margin-top: 8px;
+}

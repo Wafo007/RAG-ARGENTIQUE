@@ -11,7 +11,7 @@ import type {
   UploadMode,
   UploadResponse,
 } from '../types/api';
-
+import type { DocumentSummary } from '../types/api';
 /**
  * Client HTTP central de l'application.
  *
@@ -20,12 +20,61 @@ import type {
  * En production, définir VITE_API_BASE_URL dans le fichier .env
  * pour pointer vers l'URL réelle du backend déployé.
  */
+
+// REMPLACER ce bloc existant :
+// const apiClient = axios.create({
+//   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
+//   headers: { Accept: 'application/json' },
+// });
+
+// PAR celui-ci :
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
-  headers: {
-    Accept: 'application/json',
-  },
+  headers: { Accept: 'application/json' },
 });
+
+const AUTH_STORAGE_KEY = 'cervarent_auth_user';
+
+/**
+ * Intercepteur de requete : attache automatiquement le token JWT (si present)
+ * a chaque appel vers le backend, sans avoir a le repasser manuellement
+ * dans chaque fonction du service.
+ */
+apiClient.interceptors.request.use((config) => {
+  const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (stored) {
+    try {
+      const { token } = JSON.parse(stored) as { token: string };
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // localStorage corrompu : on ignore, la requete partira sans token
+      // et le backend renverra 401/403 le cas echeant
+    }
+  }
+  return config;
+});
+
+/**
+ * Intercepteur de reponse : si le backend renvoie 401/403 (token expire ou
+ * invalide), on nettoie la session et on redirige vers /login plutot que
+ * de laisser l'utilisateur face a des erreurs silencieuses.
+ */
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      // Redirection "dure" plutot que via react-router : l'intercepteur
+      // n'est pas un composant React, il n'a pas acces a useNavigate()
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 /**
  * Callbacks appelés au fil de la réponse en streaming (voir streamAskQuestion).
@@ -40,6 +89,10 @@ export interface StreamCallbacks {
   onDone?: (processingTimeMs: number) => void;
   /** Appelé en cas d'erreur côté serveur pendant la génération */
   onError?: (message: string) => void;
+}
+
+export interface UploadProgressCallbacks {
+  onProgress?: (currentPage: number, totalPages: number, percent: number, chunksIndexed: number) => void;
 }
 
 /**
@@ -134,15 +187,40 @@ export const ragApi = {
   ): Promise<void> {
     const baseURL = apiClient.defaults.baseURL ?? '/api';
 
-    const response = await fetch(`${baseURL}/rag/ask/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      },
-      body: JSON.stringify(payload),
-      signal,
-    });
+    // REMPLACER ce bloc dans streamAskQuestion :
+  // const response = await fetch(`${baseURL}/rag/ask/stream`, {
+  //   method: 'POST',
+  //   headers: {
+  //     'Content-Type': 'application/json',
+  //     Accept: 'text/event-stream',
+  //   },
+  //   body: JSON.stringify(payload),
+  //   signal,
+  // });
+
+  // PAR celui-ci :
+  function getAuthHeader(): Record<string, string> {
+    const stored = localStorage.getItem('cervarent_auth_user');
+    if (!stored) return {};
+    try {
+      const { token } = JSON.parse(stored) as { token: string };
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    } catch {
+      return {};
+    }
+  }
+
+  // ... puis dans la fonction :
+  const response = await fetch(`${baseURL}/rag/ask/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...getAuthHeader(), // fetch() n'est pas concerne par l'intercepteur axios ci-dessus
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
 
     if (!response.ok || !response.body) {
       throw new Error(`Le serveur a répondu avec le statut ${response.status}`);
@@ -192,6 +270,32 @@ export const ragApi = {
     return data;
   },
 
+    /**
+   * GET /api/rag/documents/library
+   * Recupere la liste des documents indexes, regroupes par source, avec
+   * statut/taille/date — pour la vue "bibliotheque documentaire".
+   */
+  async getDocumentLibrary(): Promise<DocumentSummary[]> {
+    const { data } = await apiClient.get<DocumentSummary[]>('/rag/documents/library');
+    return data;
+  },
+
+  /**
+   * DELETE /api/rag/documents/{source}
+   * Supprime definitivement un document indexe (tous ses chunks).
+   */
+  async deleteDocument(source: string): Promise<void> {
+    await apiClient.delete(`/rag/documents/${encodeURIComponent(source)}`);
+  },
+
+  /**
+   * PUT /api/rag/documents/{source}
+   * Remplace le contenu d'un document existant et le reindexe.
+   */
+  async updateDocument(source: string, payload: DocumentRequest): Promise<void> {
+    await apiClient.put(`/rag/documents/${encodeURIComponent(source)}`, payload);
+  },
+
   /**
    * POST /api/rag/upload
    * Upload un fichier (PDF, TXT, DOCX) pour indexation.
@@ -224,6 +328,66 @@ export const ragApi = {
   async health(): Promise<HealthResponse> {
     const { data } = await apiClient.get<HealthResponse>('/rag/health');
     return data;
+  },
+
+
+  /**
+   * GET /api/rag/upload/{fileId}/progress
+   * Ouvre un flux SSE de progression pour un upload en cours (mode "instant").
+   * A appeler juste apres uploadFile(), avec le fileId recu en reponse.
+   * Le flux se termine automatiquement (le backend ferme le sink) quand
+   * le traitement est fini — pas besoin de fermer manuellement cote client
+   * dans le cas nominal, mais on retourne quand meme une fonction "close"
+   * pour permettre d'annuler si le composant est demonte avant la fin.
+   */
+  watchUploadProgress(fileId: number, callbacks: UploadProgressCallbacks): () => void {
+    const baseURL = apiClient.defaults.baseURL ?? '/api';
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const response = await fetch(`${baseURL}/rag/upload/${fileId}/progress`, {
+          headers: { Accept: 'text/event-stream', ...getAuthHeader() },
+          signal: controller.signal,
+        });
+        if (!response.body) return;
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let separatorIndex: number;
+          while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, separatorIndex);
+            buffer = buffer.slice(separatorIndex + 2);
+
+            const dataLine = rawEvent.split('\n').find((l) => l.startsWith('data:'));
+            if (dataLine) {
+              const payload = JSON.parse(dataLine.slice('data:'.length));
+              callbacks.onProgress?.(payload.currentPage, payload.totalPages, payload.percent, payload.chunksIndexed);
+            }
+          }
+        }
+      } catch {
+        // Flux interrompu (fin normale du traitement ou composant demonte) : silencieux
+      }
+    })();
+
+    return () => controller.abort();
+  },
+
+  /**
+ * POST /api/feedback
+ * Envoie un avis (pouce haut/bas) sur une reponse donnee, pour analyse
+ * ulterieure de la qualite des reponses du RAG.
+ */
+  async submitFeedback(question: string, answer: string, rating: 'UP' | 'DOWN'): Promise<void> {
+    await apiClient.post('/feedback', { question, answer, rating });
   },
 };
 

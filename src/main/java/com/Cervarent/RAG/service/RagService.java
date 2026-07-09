@@ -6,6 +6,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -30,6 +31,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class RagService {
+    @Value("${app.rag.max-distance-threshold}")
+    private double maxDistanceThreshold;
 
     private final DocumentRepository documentRepository;
     private final EmbeddingService embeddingService;
@@ -177,7 +180,23 @@ public class RagService {
     private List<SimilarChunkProjection> searchRelevantChunks(QuestionRequest request) {
         List<Float> questionEmbedding = embeddingService.embed(request.getQuestion());
         String embeddingString = embeddingService.embeddingToString(questionEmbedding);
-        return documentRepository.findSimilarDocumentsWithScore(embeddingString, request.getTopK());
+
+        List<SimilarChunkProjection> candidates = documentRepository.findSimilarDocumentsWithScore(embeddingString,
+                request.getTopK());
+
+        // FILTRE ANTI-BRUIT : on ecarte les chunks dont la distance cosinus depasse
+        // le seuil configure. Sans ce filtre, un topK=5 renvoie TOUJOURS 5 chunks,
+        // meme si seul le 1er est vraiment pertinent (cf le chunk
+        // "Classification_SVM.pdf"
+        // remonte a tort pour une question sur l'UR14 dans les logs de production).
+        List<SimilarChunkProjection> filtered = candidates.stream()
+                .filter(chunk -> chunk.getDistance() <= maxDistanceThreshold)
+                .collect(java.util.stream.Collectors.toList());
+
+        log.info("{} candidats trouves, {} retenus apres filtre de pertinence (seuil={})",
+                candidates.size(), filtered.size(), maxDistanceThreshold);
+
+        return filtered;
     }
 
     private List<Message> buildMessages(QuestionRequest request, String context) {

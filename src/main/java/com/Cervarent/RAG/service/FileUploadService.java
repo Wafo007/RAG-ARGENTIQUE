@@ -25,7 +25,13 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+
+import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.http.codec.ServerSentEvent;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 /**
  * Service responsable de l'upload et de l'indexation de fichiers (PDF, TXT,
@@ -191,6 +197,7 @@ public class FileUploadService {
 
         } catch (IOException e) {
             markAsFailed(uploadedFile.getId(), e.getMessage());
+            
             return buildResponse(uploadedFile, "FAILED", null,
                     "Erreur lecture : " + e.getMessage());
         }
@@ -270,22 +277,19 @@ public class FileUploadService {
         for (int pageNum = 0; pageNum < pages.size(); pageNum++) {
             String pageText = pages.get(pageNum).getContent();
 
-            log.debug("Page {}/{} : {} caractères", pageNum + 1, pages.size(), pageText.length());
+            log.debug("Page {}/{} : {} caracteres", pageNum + 1, pages.size(), pageText.length());
 
-            // Découper UNIQUEMENT cette page
             List<String> pageChunks = splitIntoChunks(pageText);
-
-            // Vectoriser et insérer les chunks de cette page
             globalChunkIndex = indexChunksBatch(pageChunks, source, globalChunkIndex);
-
             totalChunks += pageChunks.size();
 
-            // LIBÉRER la mémoire de cette page avant la suivante
+            // NOUVEAU : notifier la progression apres chaque page traitee
+            emitProgress(fileId, pageNum + 1, pages.size(), totalChunks);
+
             pageText = null;
             pageChunks = null;
             System.gc();
 
-            // Pause entre les pages pour laisser respirer
             if (pageNum < pages.size() - 1) {
                 try {
                     Thread.sleep(200);
@@ -296,6 +300,7 @@ public class FileUploadService {
         }
 
         log.info("PDF terminé : {} pages, {} chunks totaux", pages.size(), totalChunks);
+        closeProgress(fileId);
         return totalChunks;
     }
 
@@ -375,37 +380,38 @@ public class FileUploadService {
      * Essaye de couper aux points pour ne pas tronquer les phrases.
      */
     private List<String> splitIntoChunks(String text) {
-    List<String> chunks = new ArrayList<>();
-    
-    if (text == null || text.length() <= CHUNK_SIZE) {
-        if (text != null && !text.isEmpty()) chunks.add(text);
+        List<String> chunks = new ArrayList<>();
+
+        if (text == null || text.length() <= CHUNK_SIZE) {
+            if (text != null && !text.isEmpty())
+                chunks.add(text);
+            return chunks;
+        }
+
+        int start = 0;
+        while (start < text.length()) {
+            int end = Math.min(start + CHUNK_SIZE, text.length());
+
+            // Chercher un point pour couper proprement
+            if (end < text.length()) {
+                int lastPeriod = text.lastIndexOf(". ", end);
+                if (lastPeriod > start && lastPeriod > end - 100) {
+                    end = lastPeriod + 1;
+                }
+            }
+
+            chunks.add(text.substring(start, end).trim());
+
+            // AVANCER correctement - pas reculer !
+            int nextStart = end - CHUNK_OVERLAP;
+            if (nextStart <= start) {
+                nextStart = end; // Éviter la boucle infinie
+            }
+            start = nextStart;
+        }
+
         return chunks;
     }
-
-    int start = 0;
-    while (start < text.length()) {
-        int end = Math.min(start + CHUNK_SIZE, text.length());
-
-        // Chercher un point pour couper proprement
-        if (end < text.length()) {
-            int lastPeriod = text.lastIndexOf(". ", end);
-            if (lastPeriod > start && lastPeriod > end - 100) {
-                end = lastPeriod + 1;
-            }
-        }
-
-        chunks.add(text.substring(start, end).trim());
-        
-        // AVANCER correctement - pas reculer !
-        int nextStart = end - CHUNK_OVERLAP;
-        if (nextStart <= start) {
-            nextStart = end; // Éviter la boucle infinie
-        }
-        start = nextStart;
-    }
-
-    return chunks;
-}
 
     // ============================================
     // EXTRACTION DE TEXTE
@@ -583,5 +589,50 @@ public class FileUploadService {
                 .message(message)
                 .createdAt(file.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * Un "Sink" par fichier en cours de traitement, permettant d'emettre des
+     * evenements de progression consommables par le frontend via SSE.
+     * Cle = fileId, nettoye automatiquement a la fin du traitement.
+     */
+    private final ConcurrentHashMap<Long, Sinks.Many<ServerSentEvent<Object>>> progressSinks = new ConcurrentHashMap<>();
+
+    /**
+     * Expose le flux de progression d'un fichier en cours de traitement.
+     * Appele par le controller pour le endpoint GET
+     * /api/rag/upload/{fileId}/progress
+     */
+    public Flux<ServerSentEvent<Object>> getProgressStream(Long fileId) {
+        Sinks.Many<ServerSentEvent<Object>> sink = progressSinks.computeIfAbsent(
+                fileId, id -> Sinks.many().multicast().onBackpressureBuffer());
+        return sink.asFlux();
+    }
+
+    /**
+     * Emet un evenement de progression et le loggue ; ignore silencieusement si
+     * personne n'ecoute.
+     */
+    private void emitProgress(Long fileId, int currentPage, int totalPages, int chunksIndexed) {
+        Sinks.Many<ServerSentEvent<Object>> sink = progressSinks.get(fileId);
+        if (sink != null) {
+            var payload = Map.of(
+                    "currentPage", currentPage,
+                    "totalPages", totalPages,
+                    "chunksIndexed", chunksIndexed,
+                    "percent", totalPages == 0 ? 0 : Math.round((currentPage * 100.0) / totalPages));
+            sink.tryEmitNext(ServerSentEvent.builder((Object) payload).event("progress").build());
+        }
+    }
+
+    /**
+     * Ferme et nettoie le flux de progression a la fin du traitement (succes ou
+     * echec).
+     */
+    private void closeProgress(Long fileId) {
+        Sinks.Many<ServerSentEvent<Object>> sink = progressSinks.remove(fileId);
+        if (sink != null) {
+            sink.tryEmitComplete();
+        }
     }
 }

@@ -24,6 +24,10 @@ import org.springframework.web.multipart.MultipartFile;
 import com.Cervarent.RAG.dto.UploadResponse;
 import com.Cervarent.RAG.service.FileUploadService;
 
+import org.springframework.http.MediaType;
+
+import com.Cervarent.RAG.dto.DocumentSummary;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -40,7 +44,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/rag")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*") // Autorise les requêtes cross-origin (pour frontend)
+// @CrossOrigin(origins = "*") // Autorise les requêtes cross-origin (pour
+// frontend)
 public class RagController {
 
     private final DocumentService documentService;
@@ -121,7 +126,8 @@ public class RagController {
     }
 
     /**
-     * Pose une question au système RAG, avec réponse en streaming (Server-Sent Events).
+     * Pose une question au système RAG, avec réponse en streaming (Server-Sent
+     * Events).
      *
      * Contrairement à /ask qui attend la réponse complète avant de répondre,
      * cet endpoint envoie la réponse au fur et à mesure qu'elle est générée,
@@ -140,9 +146,26 @@ public class RagController {
     /**
      * Récupère tous les chunks indexés (utile pour debug).
      */
-    @GetMapping("/documents")
-    public ResponseEntity<List<DocumentChunk>> getAllDocuments() {
-        return ResponseEntity.ok(documentService.getAllChunks());
+    /**
+     * Recupere tous les chunks indexes SANS les embeddings (trop volumineux,
+     * inutiles pour l'affichage, et source probable du timeout observe avec
+     * Supabase). Utiliser /documents/library pour la vue "bibliotheque" normale.
+     */
+    @GetMapping("/documentst")
+    public ResponseEntity<List<Map<String, Object>>> getAllDocuments() {
+        List<Map<String, Object>> lightweightChunks = documentService.getAllChunks().stream()
+                .map(chunk -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("id", chunk.getId());
+                    map.put("documentTitle", chunk.getDocumentTitle());
+                    map.put("content", chunk.getContent());
+                    map.put("chunkIndex", chunk.getChunkIndex());
+                    map.put("source", chunk.getSource());
+                    map.put("createdAt", chunk.getCreatedAt());
+                    return map;
+                })
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(lightweightChunks);
     }
 
     /**
@@ -154,5 +177,48 @@ public class RagController {
         response.put("status", "UP");
         response.put("service", "RAG Mistral");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Bibliotheque documentaire : liste des documents indexes avec
+     * statut/taille/date.
+     */
+    @GetMapping("/documents")
+    public ResponseEntity<List<DocumentSummary>> getDocumentLibrary() {
+        return ResponseEntity.ok(documentService.getDocumentLibrary());
+    }
+
+    /**
+     * Supprime un document indexe (tous ses chunks) par son nom de source.
+     * Exemple : DELETE /api/rag/documents/guide_ethique.pdf
+     */
+    @DeleteMapping("/documents/{source}")
+    public ResponseEntity<Map<String, String>> deleteDocument(@PathVariable String source) {
+        try {
+            documentService.deleteDocument(source);
+            return ResponseEntity.ok(Map.of("status", "success", "message", "Document supprime : " + source));
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * Met a jour un document existant (remplace son contenu et le reindexe).
+     */
+    @PutMapping("/documents/{source}")
+    public ResponseEntity<Map<String, String>> updateDocument(
+            @PathVariable String source, @RequestBody DocumentRequest request) {
+        documentService.updateDocument(source, request);
+        return ResponseEntity.ok(Map.of("status", "success", "message", "Document mis a jour : " + source));
+    }
+
+    /**
+     * Flux SSE de progression d'un upload PDF en cours (page par page).
+     * Le frontend s'y connecte juste apres avoir recu la reponse de /upload
+     * (qui contient le fileId), tant que le statut n'est pas COMPLETED/FAILED.
+     */
+    @GetMapping(value = "/upload/{fileId}/progress", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<Object>> getUploadProgress(@PathVariable Long fileId) {
+        return fileUploadService.getProgressStream(fileId);
     }
 }

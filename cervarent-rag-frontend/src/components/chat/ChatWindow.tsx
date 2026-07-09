@@ -7,6 +7,7 @@ import type { ChatTurn } from '../../types/api';
 import type { ChatMessage, Conversation } from '../../types/conversation';
 import { generateId } from '../../utils/id';
 import './ChatWindow.css';
+import UserGreeting from '../UserGreeting';
 
 const EXAMPLES = [
   'Quelles sont les publications sur la biodiversité ?',
@@ -180,6 +181,9 @@ export default function ChatWindow({
             <div className="chat-window__empty-icon">
               <Sparkles size={26} />
             </div>
+            <div>
+              <UserGreeting />
+            </div>
             <h2>Recherche augmentée par IA</h2>
             <p>
               Posez vos questions en langage naturel. Le système analyse les publications du
@@ -198,6 +202,7 @@ export default function ChatWindow({
             <ChatMessageBubble
               key={message.id}
               message={message}
+              previousUserQuestion={message.role === 'assistant' ? messages[index - 1]?.content ?? '' : ''}
               onRegenerate={
                 index === messages.length - 1 && canRegenerate ? regenerateLastAnswer : undefined
               }

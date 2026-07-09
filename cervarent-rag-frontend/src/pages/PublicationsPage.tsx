@@ -8,6 +8,7 @@ import UploadPanel from '../components/UploadPanel';
 import { ragApi } from '../services/ragApi';
 import type { DocumentChunk } from '../types/api';
 import './PublicationsPage.css';
+import DocumentLibrary from '../components/DocumentLibrary';
 
 /**
  * Page "Publications" : reproduit la maquette fournie.
@@ -69,7 +70,7 @@ export default function PublicationsPage() {
     <Layout withSidebar>
       <StatsRow stats={stats} />
 
-      <RagSearchPanel />
+      <DocumentLibrary />
 
       <section className="pub-section">
         <div className="pub-section__header">

@@ -1,0 +1,26 @@
+.user-greeting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.user-greeting__text {
+  color: var(--color-text-muted, #9ca3af);
+}
+
+.user-greeting__logout {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted, #9ca3af);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+}
+
+.user-greeting__logout:hover {
+  background: var(--color-surface-hover, #27272a);
+  color: inherit;
+}

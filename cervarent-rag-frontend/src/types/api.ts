@@ -86,3 +86,12 @@ export interface IndexResponse {
   status: string;
   message: string;
 }
+
+/** Correspond a DocumentSummary.java — renvoye par GET /api/rag/documents/library */
+export interface DocumentSummary {
+  source: string;
+  documentTitle: string;
+  chunksCount: number;
+  totalCharacters: number;
+  addedAt: string;
+}

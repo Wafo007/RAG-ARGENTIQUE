@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { UploadCloud, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { ragApi } from '../services/ragApi';
 import type { UploadMode, UploadResponse } from '../types/api';
@@ -19,6 +19,14 @@ export default function UploadPanel() {
   const [result, setResult] = useState<UploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ currentPage: number; totalPages: number; percent: number } | null>(null);
+  const stopWatchingRef = useRef<(() => void) | null>(null);
+
+  // Nettoyage : si le composant est demonte pendant un upload en cours,
+  // on arrete d'ecouter le flux SSE pour eviter une fuite de connexion
+  useEffect(() => {
+    return () => stopWatchingRef.current?.();
+  }, []);
 
   async function handleFileChange() {
     const file = inputRef.current?.files?.[0];
@@ -28,10 +36,23 @@ export default function UploadPanel() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setProgress(null);
 
     try {
       const response = await ragApi.uploadFile(file, mode);
       setResult(response);
+
+      // Si le mode est "instant" (asynchrone) et que le traitement n'est pas
+      // deja termine, on s'abonne au flux de progression page par page.
+      // En mode "thinking" (synchrone), la reponse HTTP n'arrive qu'une fois
+      // tout termine : pas de flux de progression a suivre.
+      if (mode === 'instant' && response.status === 'PROCESSING') {
+        stopWatchingRef.current = ragApi.watchUploadProgress(response.fileId, {
+          onProgress: (currentPage, totalPages, percent) => {
+            setProgress({ currentPage, totalPages, percent });
+          },
+        });
+      }
     } catch {
       setError("Échec de l'upload. Vérifiez le format (PDF, TXT, DOCX) et la taille (max 20 Mo).");
     } finally {
@@ -77,6 +98,21 @@ export default function UploadPanel() {
         <div className="upload-panel__status upload-panel__status--loading">
           <Loader2 size={16} className="upload-panel__spin" />
           Indexation de « {fileName} » en cours…
+        </div>
+      )}
+
+      {progress && (
+        <div className="upload-panel__progress">
+          <div className="upload-panel__progress-label">
+            Page {progress.currentPage} / {progress.totalPages}
+          </div>
+          <div className="upload-panel__progress-bar">
+            <div
+              className="upload-panel__progress-fill"
+              style={{ width: `${progress.percent}%` }}
+            />
+          </div>
+          <span className="upload-panel__progress-percent">{progress.percent}%</span>
         </div>
       )}
 

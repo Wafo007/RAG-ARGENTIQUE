@@ -4,11 +4,13 @@ import type { ChatMessage } from '../../types/conversation';
 import './ChatMessageBubble.css';
 import SourceCard from './SourceCard';
 import MarkdownRenderer from '../MarkdownRenderer';
+import MessageFeedback from './MessageFeedback';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
   onRegenerate?: () => void;
   isRegenerating?: boolean;
+  previousUserQuestion: string
 }
 
 /**
@@ -27,9 +29,16 @@ interface ChatMessageBubbleProps {
  *   à la fin du texte. Le rendu markdown "propre" n'apparaît qu'une fois la
  *   génération terminée.
  */
-export default function ChatMessageBubble({ message, onRegenerate, isRegenerating }: ChatMessageBubbleProps) {
+export default function ChatMessageBubble({ message, onRegenerate, isRegenerating, previousUserQuestion }: ChatMessageBubbleProps) {
   const isUser = message.role === 'user';
   const isWaitingForFirstChunk = Boolean(message.isStreaming) && message.content.length === 0;
+  // Dans le JSX du composant, pour un message role === 'assistant' termine
+  // (pas en cours de streaming, pas une erreur), AJOUTER juste apres le
+  // rendu du contenu/sources existant :
+
+  {message.role === 'assistant' && !message.isStreaming && !message.isError && (
+    <MessageFeedback question={previousUserQuestion} answer={message.content} />
+  )}
 
   return (
     <div className={isUser ? 'chat-msg chat-msg--user' : 'chat-msg chat-msg--assistant'}>
