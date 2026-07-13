@@ -87,6 +87,8 @@ export default function ChatMessageBubble({ message, onRegenerate, isRegeneratin
                 Régénérer
               </button>
             )}
+
+            <MessageFeedback question={previousUserQuestion} answer={message.content} />
           </div>
         )}
 

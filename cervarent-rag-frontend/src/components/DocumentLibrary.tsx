@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { FileText, Trash2, RefreshCw, AlertCircle, Download } from 'lucide-react';
 import { ragApi } from '../services/ragApi';
 import type { DocumentSummary } from '../types/api';
 import './DocumentLibrary.css';
@@ -47,6 +47,14 @@ export default function DocumentLibrary() {
   useEffect(() => {
     loadDocuments();
   }, []);
+
+  async function handleDownload(source: string, title: string) {
+    try {
+      await ragApi.downloadDocument(source, title);
+    } catch {
+      setError(`Échec du téléchargement de « ${source} ».`);
+    }
+  }
 
   async function handleDelete(source: string) {
     // Confirmation simple avant une action destructive et irreversible
@@ -106,7 +114,15 @@ export default function DocumentLibrary() {
                 <td>{doc.chunksCount}</td>
                 <td>{formatSize(doc.totalCharacters)}</td>
                 <td>{formatDate(doc.addedAt)}</td>
-                <td>
+                <td className="doc-library__actions">
+                  <button
+                    type="button"
+                    className="doc-library__download"
+                    onClick={() => handleDownload(doc.source, doc.documentTitle)}
+                    title="Télécharger ce document"
+                  >
+                    <Download size={16} />
+                  </button>
                   <button
                     type="button"
                     className="doc-library__delete"

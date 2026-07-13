@@ -132,4 +132,39 @@ public class DocumentService {
         log.info("Document '{}' mis a jour ({} nouveaux chunks)", source,
                 splitIntoChunks(newContent.getContent()).size());
     }
+
+    /**
+     * Reconstitue le texte complet d'un document a partir de tous ses chunks,
+     * remis dans l'ordre (chunk_index croissant).
+     *
+     * Corrige le bug de telechargement des sources : auparavant, le bouton
+     * "Telecharger" du frontend ne telechargeait que l'extrait (excerpt) du
+     * SEUL chunk cite par l'IA dans sa reponse, c'est a dire un fragment de
+     * quelques centaines de caracteres, pas le document reel. Desormais, on
+     * recupere TOUS les chunks appartenant a la meme source et on les
+     * recolle dans l'ordre, pour obtenir une reconstitution fidele du
+     * document original tel qu'il a ete indexe.
+     *
+     * @param source identifiant du document (nom de fichier ou libelle fourni a l'indexation)
+     * @throws RuntimeException si aucun chunk ne correspond a cette source
+     */
+    public DocumentContent getFullDocumentContent(String source) {
+        List<DocumentChunk> chunks = documentRepository.findBySourceOrderByChunkIndexAsc(source);
+
+        if (chunks.isEmpty()) {
+            throw new RuntimeException("Aucun document trouve avec la source : " + source);
+        }
+
+        String fullText = chunks.stream()
+                .map(DocumentChunk::getContent)
+                .collect(java.util.stream.Collectors.joining("\n\n"));
+
+        String title = chunks.get(0).getDocumentTitle();
+
+        return new DocumentContent(title, source, fullText);
+    }
+
+    /** Petit porteur de donnees pour le telechargement (titre + source + texte complet reconstitue). */
+    public record DocumentContent(String title, String source, String fullText) {
+    }
 }

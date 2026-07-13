@@ -114,4 +114,13 @@ public interface DocumentRepository extends JpaRepository<DocumentChunk, Long> {
                         ORDER BY id
                         """, nativeQuery = true)
         List<DocumentChunkLightProjection> findAllLight();
+
+        /**
+         * Récupère tous les chunks d'un même document (même "source"), triés par
+         * chunk_index, pour pouvoir reconstituer le texte complet du document
+         * dans l'ordre original. Utilisé par la fonctionnalité de téléchargement
+         * de source : avant, on ne téléchargeait que l'extrait (excerpt) d'un
+         * seul chunk cité par l'IA ; désormais on reconstitue le document entier.
+         */
+        List<DocumentChunk> findBySourceOrderByChunkIndexAsc(String source);
 }

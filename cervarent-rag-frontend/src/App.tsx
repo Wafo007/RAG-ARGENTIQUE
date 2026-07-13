@@ -6,18 +6,15 @@ import ContactPage from './pages/ContactPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import RequireAuth from './components/auth/RequireAuth';
 
 /**
  * Point d'entrée des routes de l'application.
  *
  * - "/"                          : page d'accueil (publique)
- * - "/login", "/register", ...   : authentification (publiques)
- * - "/chat"                      : chat RAG (protégé, nécessite une connexion)
- * - "/publications"              : bibliothèque + recherche RAG (publique)
- * - "/publications/recherche-rag": recherche RAG seule (publique)
+ * - "/login", "/register"        : authentification (publiques)
+ * - "/publications"              : présentation publique (publique)
+ * - "/publications/recherche-rag": chat RAG (PROTÉGÉ — nécessite une connexion)
  * - "/contact"                   : page de contact (publique)
  * - autres liens du menu         : pages "à venir"
  * - toute route inconnue         : redirection vers l'accueil
@@ -28,17 +25,17 @@ export default function App() {
       {/* Pages publiques du site vitrine */}
       <Route path="/" element={<HomePage />} />
       <Route path="/publications" element={<PublicationsPage />} />
-      {/*<Route path="/publications/recherche-rag" element={<RagSearchPage />} />*/}
-      <Route path="/publications/recherche-rag" element={<RagSearchPage />} />
       <Route path="/contact" element={<ContactPage />} />
 
       {/* Authentification */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      {/* Chat RAG : protégé, redirige vers /login si non connecté */}
+      {/* Chat RAG : protégé, redirige vers /login si non connecté.
+          Une seule déclaration de cette route (avant, elle existait en
+          double : une fois publique puis une fois protégée — React Router
+          ne retenait que la première, publique, rendant la protection
+          inopérante). */}
       <Route
         path="/publications/recherche-rag"
         element={

@@ -36,7 +36,7 @@
   align-items: center;
   gap: 8px;
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--color-danger);
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -79,10 +79,28 @@
 
 .doc-library__delete:hover {
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .doc-library__delete:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+.doc-library__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.doc-library__download {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.doc-library__download:hover {
+  background: rgba(22, 163, 74, 0.1);
+  color: var(--color-primary);
 }

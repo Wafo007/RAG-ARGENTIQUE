@@ -21,6 +21,6 @@
 }
 
 .user-greeting__logout:hover {
-  background: var(--color-surface-hover, #27272a);
-  color: inherit;
+  background: var(--color-border);
+  color: var(--color-text);
 }

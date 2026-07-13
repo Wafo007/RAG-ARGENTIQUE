@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Reponse renvoyee apres une connexion/inscription reussie.
+ * Réponse renvoyée après une connexion/inscription réussie.
  * Le frontend utilise "username" pour afficher "Bonjour {username}".
  */
 @Data
@@ -16,5 +16,4 @@ import lombok.NoArgsConstructor;
 public class AuthResponse {
     private String token;
     private String username;
-    private String email;
 }

@@ -21,7 +21,7 @@ export default function LoginPage() {
     try {
       const response = await authApi.login({ username, password });
       setAuthUser(response);
-      navigate('/chat'); // redirection vers le chat une fois connecte
+      navigate('/chat');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue.');
     } finally {
@@ -35,7 +35,7 @@ export default function LoginPage() {
         {error && <div className="auth-form__error">{error}</div>}
 
         <div>
-          <label htmlFor="username">Nom d'utilisateur ou email</label>
+          <label htmlFor="username">Nom d'utilisateur</label>
           <input
             id="username"
             type="text"
@@ -63,8 +63,7 @@ export default function LoginPage() {
       </form>
 
       <div className="auth-layout__links">
-        <Link to="/forgot-password">Mot de passe oublié ?</Link>
-        <Link to="/register">Créer un compte</Link>
+        <Link to="/register">Pas encore de compte ? Créer un compte</Link>
       </div>
     </AuthLayout>
   );

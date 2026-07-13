@@ -7,6 +7,11 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * Compte utilisateur simplifié : uniquement un nom d'utilisateur et un mot
+ * de passe (haché). Pas d'email : ce projet n'a pas de fonctionnalité de
+ * mot de passe oublié, donc pas besoin de collecter un email pour ça.
+ */
 @Entity
 @Table(name = "users")
 @Data
@@ -21,10 +26,6 @@ public class User {
     @Column(nullable = false, unique = true)
     private String username;
 
-    @Column(nullable = false, unique = true)
-    private String email;
-
-    // Mot de passe stocke hache (BCrypt), jamais en clair
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 

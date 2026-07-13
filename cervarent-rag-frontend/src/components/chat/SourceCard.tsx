@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { FileText, ChevronDown, Download, Check } from 'lucide-react';
+import { FileText, ChevronDown, Download, Check, Loader2 } from 'lucide-react';
 import type { ChatSource } from '../../types/conversation';
+import { ragApi } from '../../services/ragApi';
 import './SourceCard.css';
 
 interface SourceCardProps {
@@ -18,49 +19,35 @@ function relevanceLevel(score: number): 'high' | 'medium' | 'low' {
 }
 
 /**
- * Télécharge le contenu de la source sous forme de fichier texte.
- * Le nom du fichier est dérivé du titre du document.
+ * Carte affichant une source documentaire citée par l'IA dans sa réponse,
+ * avec un score de pertinence, un aperçu dépliable, et un bouton de
+ * téléchargement.
+ *
+ * Le téléchargement appelle désormais le backend
+ * (GET /api/rag/documents/{source}/download), qui reconstitue et renvoie
+ * le document COMPLET (tous ses chunks recollés dans l'ordre), au lieu de
+ * ne télécharger que l'extrait (excerpt) du seul chunk cité par l'IA.
  */
-function downloadSource(source: ChatSource) {
-  const filename = (source.documentTitle || source.source || 'document')
-    .replace(/[^a-zA-Z0-9\u00C0-\u017F\s-]/g, '') // Nettoyer les caractères spéciaux
-    .trim()
-    .replace(/\s+/g, '_') + '.txt';
-
-  const content = [
-    `Document : ${source.documentTitle || source.source}`,
-    `Source : ${source.source}`,
-    `Score de pertinence : ${Math.round(source.relevanceScore * 100)}%`,
-    '',
-    '--- Extrait ---',
-    '',
-    source.excerpt || 'Aucun extrait disponible.',
-  ].join('\n');
-
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
 export default function SourceCard({ source }: SourceCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [justDownloaded, setJustDownloaded] = useState(false);
-  
+  const [downloadState, setDownloadState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+
   const level = relevanceLevel(source.relevanceScore);
   const percentage = Math.round(source.relevanceScore * 100);
 
-  function handleDownload(e: React.MouseEvent) {
-    e.stopPropagation(); // Empêche le dépliement de la carte
-    downloadSource(source);
-    setJustDownloaded(true);
-    setTimeout(() => setJustDownloaded(false), 2000);
+  async function handleDownload(event: React.MouseEvent) {
+    event.stopPropagation(); // Empêche le dépliement de la carte
+    if (downloadState === 'loading') return;
+
+    setDownloadState('loading');
+    try {
+      await ragApi.downloadDocument(source.source, source.documentTitle || source.source);
+      setDownloadState('done');
+      setTimeout(() => setDownloadState('idle'), 2000);
+    } catch {
+      setDownloadState('error');
+      setTimeout(() => setDownloadState('idle'), 2500);
+    }
   }
 
   return (
@@ -76,18 +63,21 @@ export default function SourceCard({ source }: SourceCardProps) {
         <span className="source-card__score" title="Score de pertinence (similarité avec la question)">
           {percentage}%
         </span>
-        
-        {/* Bouton de téléchargement */}
+
         <button
           type="button"
           className="source-card__download"
           onClick={handleDownload}
-          title={`Télécharger le document : ${source.documentTitle || source.source}`}
+          disabled={downloadState === 'loading'}
+          title={`Télécharger le document complet : ${source.documentTitle || source.source}`}
           aria-label={`Télécharger le document ${source.documentTitle || source.source}`}
         >
-          {justDownloaded ? <Check size={14} /> : <Download size={14} />}
+          {downloadState === 'loading' && <Loader2 size={14} className="source-card__spin" />}
+          {downloadState === 'done' && <Check size={14} />}
+          {downloadState === 'idle' && <Download size={14} />}
+          {downloadState === 'error' && <Download size={14} className="source-card__download-error" />}
         </button>
-        
+
         <ChevronDown
           size={14}
           className={isExpanded ? 'source-card__chevron source-card__chevron--open' : 'source-card__chevron'}
@@ -96,6 +86,9 @@ export default function SourceCard({ source }: SourceCardProps) {
 
       {isExpanded && (
         <div className="source-card__excerpt">{source.excerpt || 'Aucun extrait disponible.'}</div>
+      )}
+      {downloadState === 'error' && (
+        <div className="source-card__error-message">Échec du téléchargement. Réessayez.</div>
       )}
     </div>
   );

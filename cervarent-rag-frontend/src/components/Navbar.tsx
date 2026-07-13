@@ -1,13 +1,16 @@
-import { Leaf, LogIn, Moon, Sun } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { Leaf, LogIn, LogOut, Moon, Sun } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import './Navbar.css';
 
 /**
  * Barre de navigation principale (en haut de page).
  *
  * Reprend l'identité visuelle CERVARENT : logo + nom du centre à gauche,
- * liens de navigation au centre, bouton mode sombre + "Se connecter" à droite.
+ * liens de navigation au centre, bouton mode sombre + statut de connexion
+ * à droite (bouton "Se connecter" si non connecté, salutation + déconnexion
+ * sinon).
  */
 const NAV_LINKS = [
   { label: 'Accueil', to: '/' },
@@ -20,6 +23,13 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    logout();
+    navigate('/');
+  }
 
   return (
     <header className="navbar">
@@ -58,10 +68,25 @@ export default function Navbar() {
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        <button className="navbar__login" type="button">
-          <LogIn size={16} />
-          Se connecter
-        </button>
+        {user ? (
+          <div className="navbar__user">
+            <span className="navbar__username">{user.username}</span>
+            <button
+              type="button"
+              className="navbar__login"
+              onClick={handleLogout}
+              title="Se déconnecter"
+            >
+              <LogOut size={16} />
+              Déconnexion
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="navbar__login" onClick={() => navigate('/login')}>
+            <LogIn size={16} />
+            Se connecter
+          </button>
+        )}
       </div>
     </header>
   );

@@ -131,3 +131,15 @@
     overflow-x: auto;
   }
 }
+
+.navbar__user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.navbar__username {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}

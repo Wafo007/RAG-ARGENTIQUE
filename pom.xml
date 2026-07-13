@@ -135,13 +135,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Envoi d'email (mot de passe oublié) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
-
-        <!-- Validation des DTO (@NotBlank, @Email...) -->
+        <!-- Validation des DTO (@NotBlank, @Size...) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>

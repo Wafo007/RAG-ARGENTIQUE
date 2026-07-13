@@ -16,7 +16,7 @@
 }
 
 .msg-feedback button:hover {
-  background: var(--color-surface-hover, #27272a);
+  background: var(--color-border);
   color: inherit;
 }
 
@@ -30,6 +30,6 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #22c55e;
+  color: var(--color-primary-dark);
   margin-top: 8px;
 }

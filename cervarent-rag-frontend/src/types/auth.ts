@@ -1,34 +1,27 @@
-/** Types correspondant aux DTOs Java du package auth (voir backend) */
+/**
+ * Types correspondant aux DTOs Java du package com.Cervarent.RAG.dto.auth.
+ *
+ * Auth simplifiée à l'essentiel : un username + un password, sans email ni
+ * mot de passe oublié (fonctionnalité volontairement retirée du projet).
+ */
 
 export interface AuthResponse {
   token: string;
   username: string;
-  email: string;
 }
 
 export interface RegisterPayload {
   username: string;
-  email: string;
   password: string;
 }
 
 export interface LoginPayload {
-  username: string; // accepte aussi l'email cote backend
+  username: string;
   password: string;
 }
 
-export interface ForgotPasswordPayload {
-  email: string;
-}
-
-export interface ResetPasswordPayload {
-  token: string;
-  newPassword: string;
-}
-
-/** Utilisateur actuellement connecte, stocke en memoire + localStorage */
+/** Utilisateur actuellement connecté, conservé en mémoire + localStorage */
 export interface AuthUser {
   username: string;
-  email: string;
   token: string;
 }

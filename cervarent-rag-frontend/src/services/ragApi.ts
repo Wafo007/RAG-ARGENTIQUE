@@ -3,6 +3,7 @@ import type {
   ChatTurn,
   DocumentChunk,
   DocumentRequest,
+  DocumentSummary,
   HealthResponse,
   IndexResponse,
   QuestionRequest,
@@ -11,7 +12,7 @@ import type {
   UploadMode,
   UploadResponse,
 } from '../types/api';
-import type { DocumentSummary } from '../types/api';
+
 /**
  * Client HTTP central de l'application.
  *
@@ -20,14 +21,6 @@ import type { DocumentSummary } from '../types/api';
  * En production, définir VITE_API_BASE_URL dans le fichier .env
  * pour pointer vers l'URL réelle du backend déployé.
  */
-
-// REMPLACER ce bloc existant :
-// const apiClient = axios.create({
-//   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
-//   headers: { Accept: 'application/json' },
-// });
-
-// PAR celui-ci :
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
   headers: { Accept: 'application/json' },
@@ -35,39 +28,41 @@ const apiClient = axios.create({
 
 const AUTH_STORAGE_KEY = 'cervarent_auth_user';
 
+/** Lit le token JWT stocké en localStorage, sous forme de header prêt à l'emploi. */
+function getAuthHeader(): Record<string, string> {
+  const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (!stored) return {};
+  try {
+    const { token } = JSON.parse(stored) as { token: string };
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
- * Intercepteur de requete : attache automatiquement le token JWT (si present)
- * a chaque appel vers le backend, sans avoir a le repasser manuellement
- * dans chaque fonction du service.
+ * Intercepteur de requête : attache automatiquement le token JWT (si présent)
+ * à chaque appel Axios, sans avoir à le repasser manuellement dans chaque
+ * fonction du service.
  */
 apiClient.interceptors.request.use((config) => {
-  const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-  if (stored) {
-    try {
-      const { token } = JSON.parse(stored) as { token: string };
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch {
-      // localStorage corrompu : on ignore, la requete partira sans token
-      // et le backend renverra 401/403 le cas echeant
-    }
+  const authHeader = getAuthHeader();
+  if (authHeader.Authorization) {
+    config.headers.Authorization = authHeader.Authorization;
   }
   return config;
 });
 
 /**
- * Intercepteur de reponse : si le backend renvoie 401/403 (token expire ou
- * invalide), on nettoie la session et on redirige vers /login plutot que
- * de laisser l'utilisateur face a des erreurs silencieuses.
+ * Intercepteur de réponse : si le backend renvoie 401/403 (token expiré ou
+ * invalide), on nettoie la session et on redirige vers /login plutôt que
+ * de laisser l'utilisateur face à des erreurs silencieuses.
  */
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.removeItem(AUTH_STORAGE_KEY);
-      // Redirection "dure" plutot que via react-router : l'intercepteur
-      // n'est pas un composant React, il n'a pas acces a useNavigate()
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
@@ -76,18 +71,11 @@ apiClient.interceptors.response.use(
   }
 );
 
-/**
- * Callbacks appelés au fil de la réponse en streaming (voir streamAskQuestion).
- * Tous optionnels : un appelant peut ne s'intéresser qu'à certains évènements.
- */
+/** Callbacks appelés au fil de la réponse en streaming (voir streamAskQuestion). */
 export interface StreamCallbacks {
-  /** Appelé une fois, dès que les sources documentaires sont connues (avant le texte) */
   onSources?: (sources: SimpleSource[]) => void;
-  /** Appelé à chaque fragment de texte reçu */
   onChunk?: (textDelta: string) => void;
-  /** Appelé une fois, à la fin du flux, avec le temps de traitement total */
   onDone?: (processingTimeMs: number) => void;
-  /** Appelé en cas d'erreur côté serveur pendant la génération */
   onError?: (message: string) => void;
 }
 
@@ -98,15 +86,7 @@ export interface UploadProgressCallbacks {
 /**
  * Découpe un évènement SSE brut (texte entre deux "\n\n") en son type
  * ("event:") et son contenu ("data:"), puis appelle le callback correspondant.
- *
- * Format SSE rappel :
- *   event: chunk
- *   data: voici un fragment de texte
- *
- * Une ligne "data:" peut apparaître plusieurs fois pour un même évènement
- * (texte multi-lignes côté serveur) : on les rejoint avec "\n".
  */
-
 function handleSseEvent(rawEvent: string, callbacks: StreamCallbacks): void {
   let eventType = 'message';
   const dataLines: string[] = [];
@@ -115,14 +95,10 @@ function handleSseEvent(rawEvent: string, callbacks: StreamCallbacks): void {
     if (line.startsWith('event:')) {
       eventType = line.slice('event:'.length).trim();
     } else if (line.startsWith('data:')) {
-      // CORRECTIF DÉFINITIF : on garde TOUT ce qui suit "data:" tel quel,
-      // sans retirer le moindre caractère. Notre backend (RagService.java)
-      // n'insère aucun espace de séparation après "data:" : ce qui suit les
-      // deux-points est le contenu EXACT du fragment Mistral. Comme ce
-      // fragment commence très souvent lui-même par un espace (convention
-      // des tokenizers type Mistral/GPT, l'espace fait partie du token), le
-      // retirer — même un seul, "par convention SSE" — détruit l'espacement
-      // réel entre les mots. D'où le bug des mots collés malgré le 1er correctif.
+      // On garde tout ce qui suit "data:" tel quel (sans retirer d'espace) :
+      // le backend n'insère aucun séparateur après "data:", et le fragment
+      // Mistral commence souvent lui-même par un espace qui fait partie du
+      // token — le retirer casserait l'espacement entre les mots.
       dataLines.push(line.slice('data:'.length));
     }
   }
@@ -149,36 +125,50 @@ function handleSseEvent(rawEvent: string, callbacks: StreamCallbacks): void {
   }
 }
 
+/** Lit un flux SSE (fetch + ReadableStream) et distribue chaque évènement complet reçu. */
+async function consumeSseStream(
+  response: Response,
+  onEvent: (rawEvent: string) => void
+): Promise<void> {
+  if (!response.body) return;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    let separatorIndex: number;
+    while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+      const rawEvent = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+      if (rawEvent.trim()) onEvent(rawEvent);
+    }
+  }
+}
+
 /**
- * Service regroupant tous les appels vers /api/rag/*
- * (RagController.java côté backend).
+ * Service regroupant tous les appels vers /api/rag/* et /api/feedback
+ * (RagController.java / FeedbackController.java côté backend).
  */
 export const ragApi = {
-  /**
-   * POST /api/rag/ask
-   * Pose une question au moteur RAG et reçoit une réponse générée par l'IA
-   * accompagnée des sources documentaires utilisées (réponse complète, non streamée).
-   */
+  /** POST /api/rag/ask — question/réponse complète (non streamée). */
   async askQuestion(payload: QuestionRequest): Promise<RagResponse> {
     const { data } = await apiClient.post<RagResponse>('/rag/ask', payload);
     return data;
   },
 
   /**
-   * POST /api/rag/ask/stream
-   * Version streamée de askQuestion : la réponse arrive fragment par fragment
-   * via Server-Sent Events, et chaque fragment déclenche le callback approprié.
+   * POST /api/rag/ask/stream — version streamée : la réponse arrive
+   * fragment par fragment via Server-Sent Events.
    *
-   * Pourquoi fetch() + ReadableStream plutôt que l'API EventSource native ?
-   * → EventSource ne supporte que les requêtes GET, sans corps de requête.
-   *   Ici on doit envoyer la question, topK ET l'historique de conversation,
-   *   ce qui nécessite un POST avec un corps JSON. fetch() le permet, et son
-   *   response.body (un ReadableStream) permet de lire la réponse au fur et
-   *   à mesure qu'elle arrive plutôt que d'attendre sa fin.
-   *
-   * @param payload Question, topK et historique
-   * @param callbacks Fonctions appelées au fil des évènements reçus
-   * @param signal AbortSignal optionnel, pour interrompre la génération (bouton "Stop")
+   * Utilise fetch() + ReadableStream plutôt que l'API EventSource native,
+   * car EventSource ne supporte pas les requêtes POST avec corps JSON
+   * (nécessaire ici pour transmettre question + topK + historique).
    */
   async streamAskQuestion(
     payload: QuestionRequest,
@@ -187,120 +177,91 @@ export const ragApi = {
   ): Promise<void> {
     const baseURL = apiClient.defaults.baseURL ?? '/api';
 
-    // REMPLACER ce bloc dans streamAskQuestion :
-  // const response = await fetch(`${baseURL}/rag/ask/stream`, {
-  //   method: 'POST',
-  //   headers: {
-  //     'Content-Type': 'application/json',
-  //     Accept: 'text/event-stream',
-  //   },
-  //   body: JSON.stringify(payload),
-  //   signal,
-  // });
-
-  // PAR celui-ci :
-  function getAuthHeader(): Record<string, string> {
-    const stored = localStorage.getItem('cervarent_auth_user');
-    if (!stored) return {};
-    try {
-      const { token } = JSON.parse(stored) as { token: string };
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    } catch {
-      return {};
-    }
-  }
-
-  // ... puis dans la fonction :
-  const response = await fetch(`${baseURL}/rag/ask/stream`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      ...getAuthHeader(), // fetch() n'est pas concerne par l'intercepteur axios ci-dessus
-    },
-    body: JSON.stringify(payload),
-    signal,
-  });
+    const response = await fetch(`${baseURL}/rag/ask/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...getAuthHeader(), // fetch() n'est pas concerné par l'intercepteur axios
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
 
     if (!response.ok || !response.body) {
       throw new Error(`Le serveur a répondu avec le statut ${response.status}`);
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-    // Boucle de lecture du flux : chaque itération récupère un nouveau morceau
-    // de bytes, le décode en texte, et l'ajoute au buffer. On en extrait ensuite
-    // tous les évènements SSE complets (séparés par une ligne vide "\n\n") déjà
-    // disponibles, en gardant le reste (évènement potentiellement incomplet)
-    // pour la prochaine itération.
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      let separatorIndex: number;
-      while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
-        const rawEvent = buffer.slice(0, separatorIndex);
-        buffer = buffer.slice(separatorIndex + 2);
-        if (rawEvent.trim()) {
-          handleSseEvent(rawEvent, callbacks);
-        }
-      }
-    }
+    await consumeSseStream(response, (rawEvent) => handleSseEvent(rawEvent, callbacks));
   },
 
-  /**
-   * POST /api/rag/index
-   * Indexe manuellement un document texte (titre + contenu + source optionnelle).
-   */
+  /** POST /api/rag/index — indexation manuelle d'un document texte. */
   async indexDocument(payload: DocumentRequest): Promise<IndexResponse> {
     const { data } = await apiClient.post<IndexResponse>('/rag/index', payload);
     return data;
   },
 
   /**
-   * GET /api/rag/documents
-   * Récupère tous les chunks de documents indexés (vue "bibliothèque").
-   */
-  async getAllDocuments(): Promise<DocumentChunk[]> {
-    const { data } = await apiClient.get<DocumentChunk[]>('/rag/documents');
-    return data;
-  },
-
-    /**
-   * GET /api/rag/documents/library
-   * Recupere la liste des documents indexes, regroupes par source, avec
-   * statut/taille/date — pour la vue "bibliotheque documentaire".
+   * GET /api/rag/documents — bibliothèque documentaire (documents regroupés
+   * par source, avec nombre de chunks/taille/date). C'est la vue principale
+   * pour afficher/gérer les documents indexés.
    */
   async getDocumentLibrary(): Promise<DocumentSummary[]> {
-    const { data } = await apiClient.get<DocumentSummary[]>('/rag/documents/library');
+    const { data } = await apiClient.get<DocumentSummary[]>('/rag/documents');
     return data;
   },
 
-  /**
-   * DELETE /api/rag/documents/{source}
-   * Supprime definitivement un document indexe (tous ses chunks).
-   */
+  /** GET /api/rag/documents/chunks — tous les chunks bruts (debug uniquement). */
+  async getAllChunks(): Promise<DocumentChunk[]> {
+    const { data } = await apiClient.get<DocumentChunk[]>('/rag/documents/chunks');
+    return data;
+  },
+
+  /** DELETE /api/rag/documents/{source} — supprime définitivement un document. */
   async deleteDocument(source: string): Promise<void> {
     await apiClient.delete(`/rag/documents/${encodeURIComponent(source)}`);
   },
 
-  /**
-   * PUT /api/rag/documents/{source}
-   * Remplace le contenu d'un document existant et le reindexe.
-   */
+  /** PUT /api/rag/documents/{source} — remplace le contenu d'un document et le réindexe. */
   async updateDocument(source: string, payload: DocumentRequest): Promise<void> {
     await apiClient.put(`/rag/documents/${encodeURIComponent(source)}`, payload);
   },
 
   /**
-   * POST /api/rag/upload
-   * Upload un fichier (PDF, TXT, DOCX) pour indexation.
-   * mode = "thinking" (synchrone) ou "instant" (asynchrone).
+   * GET /api/rag/documents/{source}/download — télécharge le document COMPLET
+   * (tous ses chunks recollés dans l'ordre), pas seulement l'extrait cité
+   * par l'IA. Déclenche directement le téléchargement dans le navigateur.
    */
+  async downloadDocument(source: string, suggestedFilename?: string): Promise<void> {
+    const baseURL = apiClient.defaults.baseURL ?? '/api';
+
+    const response = await fetch(`${baseURL}/rag/documents/${encodeURIComponent(source)}/download`, {
+      method: 'GET',
+      headers: { ...getAuthHeader() },
+    });
+
+    if (!response.ok) {
+      throw new Error("Impossible de télécharger ce document.");
+    }
+
+    // Le backend fixe déjà un nom de fichier via Content-Disposition ; on le
+    // relit ici pour respecter exactement ce nom côté navigateur.
+    const disposition = response.headers.get('Content-Disposition') ?? '';
+    const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+    const filename = match ? decodeURIComponent(match[1]) : (suggestedFilename ?? `${source}.txt`);
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  },
+
+  /** POST /api/rag/upload — upload d'un fichier (PDF, TXT, DOCX) pour indexation. */
   async uploadFile(file: File, mode: UploadMode = 'thinking'): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -312,33 +273,22 @@ export const ragApi = {
     return data;
   },
 
-  /**
-   * GET /api/rag/files/{fileId}/status
-   * Vérifie le statut de traitement d'un fichier uploadé en mode "instant".
-   */
+  /** GET /api/rag/files/{fileId}/status — statut de traitement d'un fichier uploadé en mode "instant". */
   async getFileStatus(fileId: number): Promise<UploadResponse> {
     const { data } = await apiClient.get<UploadResponse>(`/rag/files/${fileId}/status`);
     return data;
   },
 
-  /**
-   * GET /api/rag/health
-   * Vérifie que le backend (et le service IA) répond correctement.
-   */
+  /** GET /api/rag/health — vérifie que le backend répond correctement. */
   async health(): Promise<HealthResponse> {
     const { data } = await apiClient.get<HealthResponse>('/rag/health');
     return data;
   },
 
-
   /**
-   * GET /api/rag/upload/{fileId}/progress
-   * Ouvre un flux SSE de progression pour un upload en cours (mode "instant").
-   * A appeler juste apres uploadFile(), avec le fileId recu en reponse.
-   * Le flux se termine automatiquement (le backend ferme le sink) quand
-   * le traitement est fini — pas besoin de fermer manuellement cote client
-   * dans le cas nominal, mais on retourne quand meme une fonction "close"
-   * pour permettre d'annuler si le composant est demonte avant la fin.
+   * GET /api/rag/upload/{fileId}/progress — flux SSE de progression d'un
+   * upload en cours (mode "instant"), page par page. Renvoie une fonction
+   * "stop" pour interrompre l'écoute si le composant est démonté avant la fin.
    */
   watchUploadProgress(fileId: number, callbacks: UploadProgressCallbacks): () => void {
     const baseURL = apiClient.defaults.baseURL ?? '/api';
@@ -350,42 +300,22 @@ export const ragApi = {
           headers: { Accept: 'text/event-stream', ...getAuthHeader() },
           signal: controller.signal,
         });
-        if (!response.body) return;
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '';
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          let separatorIndex: number;
-          while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
-            const rawEvent = buffer.slice(0, separatorIndex);
-            buffer = buffer.slice(separatorIndex + 2);
-
-            const dataLine = rawEvent.split('\n').find((l) => l.startsWith('data:'));
-            if (dataLine) {
-              const payload = JSON.parse(dataLine.slice('data:'.length));
-              callbacks.onProgress?.(payload.currentPage, payload.totalPages, payload.percent, payload.chunksIndexed);
-            }
-          }
-        }
+        await consumeSseStream(response, (rawEvent) => {
+          const dataLine = rawEvent.split('\n').find((l) => l.startsWith('data:'));
+          if (!dataLine) return;
+          const payload = JSON.parse(dataLine.slice('data:'.length));
+          callbacks.onProgress?.(payload.currentPage, payload.totalPages, payload.percent, payload.chunksIndexed);
+        });
       } catch {
-        // Flux interrompu (fin normale du traitement ou composant demonte) : silencieux
+        // Flux interrompu (fin normale du traitement ou composant démonté) : silencieux
       }
     })();
 
     return () => controller.abort();
   },
 
-  /**
- * POST /api/feedback
- * Envoie un avis (pouce haut/bas) sur une reponse donnee, pour analyse
- * ulterieure de la qualite des reponses du RAG.
- */
+  /** POST /api/feedback — envoie un avis (pouce haut/bas) sur une réponse donnée. */
   async submitFeedback(question: string, answer: string, rating: 'UP' | 'DOWN'): Promise<void> {
     await apiClient.post('/feedback', { question, answer, rating });
   },

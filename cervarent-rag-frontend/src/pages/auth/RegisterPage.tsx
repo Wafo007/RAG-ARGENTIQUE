@@ -9,7 +9,6 @@ export default function RegisterPage() {
   const { setAuthUser } = useAuth();
 
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,16 +17,16 @@ export default function RegisterPage() {
     event.preventDefault();
     setError(null);
 
-    // Validation cote client miroir de la validation backend (@Size min=8, etc.)
+    // Validation cote client miroir de la validation backend (@Size min=6)
     // pour un retour immediat sans attendre l'aller-retour reseau
-    if (password.length < 8) {
-      setError('Le mot de passe doit contenir au moins 8 caractères.');
+    if (password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caractères.');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await authApi.register({ username, email, password });
+      const response = await authApi.register({ username, password });
       setAuthUser(response);
       navigate('/chat');
     } catch (err) {
@@ -56,17 +55,6 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-
-        <div>
           <label htmlFor="password">Mot de passe</label>
           <input
             id="password"
@@ -74,7 +62,7 @@ export default function RegisterPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={6}
           />
         </div>
 
@@ -84,7 +72,6 @@ export default function RegisterPage() {
       </form>
 
       <div className="auth-layout__links">
-        <span />
         <Link to="/login">Déjà un compte ? Se connecter</Link>
       </div>
     </AuthLayout>

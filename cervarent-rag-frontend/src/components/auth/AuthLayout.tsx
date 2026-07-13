@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import './AuthLayout.css';
 
-/** Habillage visuel commun aux pages Login/Register/ForgotPassword/ResetPassword */
+/** Habillage visuel commun aux pages Login/Register */
 export default function AuthLayout({ title, subtitle, children }: {
   title: string;
   subtitle: string;

@@ -26,7 +26,7 @@ export default function PublicationsPage() {
   useEffect(() => {
     let active = true;
     ragApi
-      .getAllDocuments()
+      .getAllChunks()
       .then((data) => {
         if (active) setChunks(data);
       })

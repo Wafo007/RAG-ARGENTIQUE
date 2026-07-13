@@ -132,3 +132,22 @@
 .source-card__download:hover svg {
   transform: translateY(-1px);
 }
+/* Icône de chargement pendant le téléchargement du document complet */
+.source-card__spin {
+  animation: source-card-spin 0.8s linear infinite;
+}
+
+@keyframes source-card-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.source-card__download-error {
+  color: var(--color-danger);
+}
+
+.source-card__error-message {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--color-danger);
+}
