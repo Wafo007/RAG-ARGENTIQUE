@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { FileText, ChevronDown, Download, Check, Loader2 } from 'lucide-react';
+import { FileText, ChevronDown, Download, Check, Loader2, Eye } from 'lucide-react';
 import type { ChatSource } from '../../types/conversation';
 import { ragApi } from '../../services/ragApi';
+import DocumentPreviewModal from '../preview/DocumentPreviewModal';
 import './SourceCard.css';
 
 interface SourceCardProps {
@@ -31,6 +32,8 @@ function relevanceLevel(score: number): 'high' | 'medium' | 'low' {
 export default function SourceCard({ source }: SourceCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [downloadState, setDownloadState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  // Contrôle l'ouverture de la fenêtre de prévisualisation pour cette source
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const level = relevanceLevel(source.relevanceScore);
   const percentage = Math.round(source.relevanceScore * 100);
@@ -50,6 +53,11 @@ export default function SourceCard({ source }: SourceCardProps) {
     }
   }
 
+  function handlePreview(event: React.MouseEvent) {
+    event.stopPropagation(); // Empêche le dépliement de la carte
+    setIsPreviewOpen(true);
+  }
+
   return (
     <div className={`source-card source-card--${level}`}>
       <button
@@ -63,6 +71,16 @@ export default function SourceCard({ source }: SourceCardProps) {
         <span className="source-card__score" title="Score de pertinence (similarité avec la question)">
           {percentage}%
         </span>
+
+        <button
+          type="button"
+          className="source-card__preview"
+          onClick={handlePreview}
+          title={`Prévisualiser : ${source.documentTitle || source.source}`}
+          aria-label={`Prévisualiser le document ${source.documentTitle || source.source}`}
+        >
+          <Eye size={14} />
+        </button>
 
         <button
           type="button"
@@ -89,6 +107,14 @@ export default function SourceCard({ source }: SourceCardProps) {
       )}
       {downloadState === 'error' && (
         <div className="source-card__error-message">Échec du téléchargement. Réessayez.</div>
+      )}
+
+      {isPreviewOpen && (
+        <DocumentPreviewModal
+          source={source.source}
+          title={source.documentTitle || source.source}
+          onClose={() => setIsPreviewOpen(false)}
+        />
       )}
     </div>
   );

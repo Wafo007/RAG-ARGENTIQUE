@@ -5,9 +5,11 @@ import com.Cervarent.RAG.dto.DocumentSummary;
 import com.Cervarent.RAG.dto.QuestionRequest;
 import com.Cervarent.RAG.dto.RagResponse;
 import com.Cervarent.RAG.dto.UploadResponse;
+import com.Cervarent.RAG.entity.UploadedFile;
 import com.Cervarent.RAG.service.DocumentService;
 import com.Cervarent.RAG.service.FileUploadService;
 import com.Cervarent.RAG.service.RagService;
+import com.Cervarent.RAG.service.SupabaseStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
@@ -43,6 +45,8 @@ public class RagController {
     private final DocumentService documentService;
     private final RagService ragService;
     private final FileUploadService fileUploadService;
+    /** NOUVEAU : accès direct au bucket Supabase pour servir le document original. */
+    private final SupabaseStorageService supabaseStorageService;
 
     // ============================================
     // QUESTIONS / REPONSES
@@ -142,8 +146,42 @@ public class RagController {
      * source (remis dans l'ordre), contrairement a l'ancien comportement du
      * frontend qui ne telechargeait que l'extrait d'un seul chunk.
      */
+    /**
+     * Télécharge le VRAI document original (PDF/DOCX/TXT/image tel qu'uploadé),
+     * depuis Supabase Storage.
+     *
+     * NOUVEAU comportement : avant, cette route reconstituait un fichier .txt
+     * à partir des chunks indexés (perte totale de mise en forme, jamais le
+     * vrai PDF/DOCX). Désormais, si le fichier a été uploadé après la mise en
+     * place de Supabase Storage, on sert directement ses octets originaux
+     * avec le bon Content-Type.
+     *
+     * Repli ("fallback") : si aucune entrée Supabase Storage n'existe pour ce
+     * document (cas d'un document indexé AVANT cette migration), on retombe
+     * sur l'ancienne reconstitution texte, pour ne rien casser.
+     */
     @GetMapping("/documents/{source}/download")
     public ResponseEntity<ByteArrayResource> downloadDocument(@PathVariable String source) {
+        UploadedFile file = fileUploadService.getFileByFilename(source);
+
+        if (file != null && file.getStoragePath() != null) {
+            byte[] bytes = supabaseStorageService.download(file.getStoragePath());
+            ByteArrayResource resource = new ByteArrayResource(bytes);
+
+            MediaType mediaType = file.getMimeType() != null
+                    ? MediaType.parseMediaType(file.getMimeType())
+                    : MediaType.APPLICATION_OCTET_STREAM;
+
+            return ResponseEntity.ok()
+                    .contentType(mediaType)
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            ContentDisposition.attachment()
+                                    .filename(file.getFilename(), StandardCharsets.UTF_8).build().toString())
+                    .contentLength(bytes.length)
+                    .body(resource);
+        }
+
+        // Repli legacy (documents indexés avant l'ajout de Supabase Storage)
         try {
             var doc = documentService.getFullDocumentContent(source);
 
@@ -166,6 +204,39 @@ public class RagController {
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    /**
+     * NOUVEAU : sert le document original en mode "inline" (affichage direct
+     * dans le navigateur/l'iframe du composant de prévisualisation React),
+     * contrairement à /download qui force le téléchargement.
+     *
+     * Utilisé par la fenêtre de prévisualisation façon Claude (PDF affiché
+     * dans un <iframe>/<embed>, images en <img>, etc.) et par l'icône "œil"
+     * sur les sources citées dans une réponse du chatbot.
+     */
+    @GetMapping("/documents/{source}/preview")
+    public ResponseEntity<ByteArrayResource> previewDocument(@PathVariable String source) {
+        UploadedFile file = fileUploadService.getFileByFilename(source);
+        if (file == null || file.getStoragePath() == null) {
+            // Pas de fichier original stocké (document legacy) : pas de preview binaire possible.
+            return ResponseEntity.notFound().build();
+        }
+
+        byte[] bytes = supabaseStorageService.download(file.getStoragePath());
+        ByteArrayResource resource = new ByteArrayResource(bytes);
+
+        MediaType mediaType = file.getMimeType() != null
+                ? MediaType.parseMediaType(file.getMimeType())
+                : MediaType.APPLICATION_OCTET_STREAM;
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline()
+                                .filename(file.getFilename(), StandardCharsets.UTF_8).build().toString())
+                .contentLength(bytes.length)
+                .body(resource);
     }
 
     /** Nettoie un nom de fichier des caracteres interdits/speciaux avant telechargement. */

@@ -46,6 +46,9 @@ RAG-ARGENTIQUE/
   - *instant* : traitement asynchrone en arrière-plan, avec **suivi de
     progression en temps réel** (barre de progression page par page).
 - **Indexation manuelle** de texte via un formulaire simple.
+- **Sauvegarde du document original** (NOUVEAU) : chaque fichier uploadé
+  (PDF, DOCX, TXT, image) est envoyé tel quel vers **Supabase Storage** en
+  plus d'être découpé/indexé. Voir `SupabaseStorageService.java`.
 
 ### Bibliothèque documentaire
 - Liste de tous les documents indexés, regroupés par source, avec nombre de
@@ -53,10 +56,23 @@ RAG-ARGENTIQUE/
 - **Suppression** d'un document (retire tous ses segments de l'index).
 - **Mise à jour** d'un document existant (remplace son contenu et le
   réindexe).
-- **Téléchargement du document complet** : cliquer sur "Télécharger" à côté
-  d'une source citée par l'IA (dans une réponse, ou depuis la bibliothèque)
-  reconstitue et télécharge **l'intégralité du document original**, et non
-  plus seulement l'extrait (chunk) cité par l'IA.
+- **Téléchargement du document RÉEL** (NOUVEAU) : le bouton "Télécharger",
+  présent à la fois dans la bibliothèque et sur chaque source citée par
+  l'IA, sert désormais l'octet-pour-octet original stocké dans Supabase
+  Storage (`GET /api/rag/documents/{source}/download`) — et non plus un
+  texte reconstitué à partir des chunks indexés. Un repli automatique vers
+  l'ancien comportement (texte reconstitué) reste actif pour les documents
+  indexés *avant* cette mise à jour, qui n'ont pas de fichier original
+  enregistré.
+- **Prévisualisation façon Claude** (NOUVEAU) : cliquer sur un document (son
+  titre, ou l'icône œil 👁) ouvre une fenêtre modale de lecture, sans
+  quitter la page ni télécharger le fichier :
+  - PDF → affiché nativement (`<embed>`) avec zoom/recherche du navigateur ;
+  - Image → affichage direct ;
+  - TXT → texte brut dans une zone de lecture ;
+  - DOCX → converti en HTML lisible côté client (librairie `mammoth`).
+  Endpoint dédié : `GET /api/rag/documents/{source}/preview`
+  (`Content-Disposition: inline`).
 
 ### Conversation
 - Historique de conversation avec mémoire courte (l'IA se souvient des
@@ -80,6 +96,25 @@ RAG-ARGENTIQUE/
 > d'email). Elle peut être réintroduite ultérieurement si nécessaire (voir
 > section "Fonctionnalités à venir").
 
+### Interface (NOUVEAU)
+- **Sidebar de conversations rétractable**, façon Claude : bouton dédié,
+  animation fluide (`width` en `cubic-bezier`), état mémorisé dans le
+  navigateur (`localStorage`) pour rester replié/déplié d'une session à
+  l'autre.
+- **Profil utilisateur** en pied de sidebar : avatar généré automatiquement
+  (initiales + couleur déterministe dérivée du nom d'utilisateur, voir
+  `utils/avatar.ts`) tant qu'aucune vraie photo n'est disponible côté
+  backend, + accès rapide à la déconnexion.
+- **Dark mode** cohérent sur l'ensemble des nouveaux composants (aucune
+  couleur codée en dur : tout repose sur les variables CSS déjà définies
+  dans `styles/global.css`).
+- **Info-bulles d'onboarding** : à la toute première connexion d'un
+  utilisateur, de courtes bulles explicatives apparaissent une seule fois
+  sur les points clés de l'interface (repli de sidebar, nouvelle
+  conversation, panneau d'upload, prévisualisation d'un document), puis ne
+  réapparaissent plus (mémorisées par compte, voir
+  `hooks/useOnboardingHint.ts`).
+
 ---
 
 ## 3. Prérequis
@@ -102,6 +137,13 @@ RAG-ARGENTIQUE/
    (`document_chunks`, `uploaded_files`, `users`, `message_feedback`) ainsi
    que les index de recherche vectorielle.
 
+   > Si votre base existe déjà (projet lancé avant cette mise à jour),
+   > ré-exécuter `schema.sql` est **sans danger** : les nouvelles colonnes
+   > liées à Supabase Storage (`storage_bucket`, `storage_path`,
+   > `public_url`, `mime_type`, `extension`, `updated_at`) sont ajoutées via
+   > `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, qui ne touche pas aux
+   > données déjà présentes.
+
 ### 4.2. Backend
 
 1. Configurer `src/main/resources/application.properties` avec vos propres
@@ -116,7 +158,18 @@ RAG-ARGENTIQUE/
    spring.ai.mistralai.api-key=<votre-clé-api-mistral>
 
    app.jwt.secret=<une-chaine-secrete-longue-et-aleatoire>
+
+   # NOUVEAU — Supabase Storage (sauvegarde des documents originaux)
+   supabase.url=<https://VOTRE-PROJET.supabase.co>
+   supabase.service-role-key=<votre-clé-service_role, PAS la clé anon>
+   supabase.storage.bucket=documents
    ```
+
+   > **Supabase Storage** : créez au préalable un bucket (ex. `documents`)
+   > dans votre projet Supabase (Storage → New bucket). Il peut rester
+   > **privé** : le backend génère des URLs signées temporaires pour le
+   > téléchargement/la prévisualisation, la clé `service_role` ne quitte
+   > jamais le serveur.
 
 2. Lancer le backend :
 
@@ -165,7 +218,8 @@ dto/          → Objets de transfert (requêtes/réponses API)
 entity/       → Entités JPA (mappées sur les tables PostgreSQL)
 repository/   → Accès aux données (Spring Data JPA + requêtes SQL natives pgvector)
 security/     → Filtre et utilitaire JWT
-service/      → Logique métier (RAG, documents, upload, authentification)
+service/      → Logique métier (RAG, documents, upload, authentification,
+                 stockage des fichiers originaux sur Supabase Storage)
 ```
 
 **Pipeline RAG** (`RagService`) : la question de l'utilisateur est
@@ -176,12 +230,16 @@ injecté dans un prompt système envoyé au LLM pour générer la réponse final
 ### Frontend (`cervarent-rag-frontend/src`)
 
 ```
-components/   → Composants réutilisables (chat, upload, bibliothèque, auth)
+components/   → Composants réutilisables (chat, upload, bibliothèque, auth,
+                 avatar, info-bulles d'onboarding)
+components/preview/ → Fenêtre de prévisualisation de document (NOUVEAU)
 context/      → État global (authentification, thème clair/sombre)
-hooks/        → Logique réutilisable (gestion des conversations)
+hooks/        → Logique réutilisable (conversations, info-bulles d'onboarding)
 pages/        → Pages de l'application (accueil, publications, chat, auth)
 services/     → Clients HTTP vers le backend (ragApi, authApi)
 types/        → Types TypeScript synchronisés avec les DTOs backend
+utils/        → Fonctions utilitaires (dates, avatar, détection de type de
+                 fichier pour la prévisualisation)
 ```
 
 L'identité visuelle (couleurs, typographies, rayons) est centralisée dans
@@ -196,6 +254,9 @@ d'authentification, pour une cohérence visuelle sur l'ensemble du site.
 - **Ne jamais committer** `application.properties` avec de vraies
   identifiants : utiliser des variables d'environnement ou un fichier
   ignoré par Git.
+- La clé **`supabase.service-role-key`** contourne toutes les règles de
+  sécurité Supabase (RLS) : elle ne doit exister que côté backend, jamais
+  dans le code frontend ni dans une réponse API.
 - Régénérer `app.jwt.secret` avec une valeur longue et aléatoire propre à
   chaque environnement.
 - Restreindre la configuration CORS (`SecurityConfig`) au(x) domaine(s)

@@ -43,8 +43,36 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
     chunks_count    INTEGER,
     error_message   TEXT,
     created_at      TIMESTAMP DEFAULT NOW(),
-    completed_at    TIMESTAMP
+    completed_at    TIMESTAMP,
+
+    -- ============================================================
+    -- NOUVEAU : traçabilité du document ORIGINAL dans Supabase Storage.
+    -- Sans ces colonnes, seuls les chunks/embeddings étaient conservés,
+    -- rendant impossible tout téléchargement/prévisualisation du fichier
+    -- réel uploadé par l'utilisateur.
+    -- ============================================================
+    storage_bucket  VARCHAR(100),           -- nom du bucket Supabase (ex: 'documents')
+    storage_path    VARCHAR(500),           -- chemin relatif dans le bucket (ex: 'uuid/rapport.pdf')
+    public_url      TEXT,                   -- dernière URL signée générée (cache, peut expirer)
+    mime_type       VARCHAR(150),           -- type MIME précis (ex: application/pdf)
+    extension       VARCHAR(20),            -- extension normalisée (ex: 'pdf', 'docx', 'txt', 'png')
+    updated_at      TIMESTAMP DEFAULT NOW() -- dernière modification de la ligne
 );
+
+-- Migration idempotente : ajoute les colonnes si la table existe déjà avec
+-- l'ancien schéma (exécution sans danger, ne modifie rien si déjà présent).
+ALTER TABLE uploaded_files ADD COLUMN IF NOT EXISTS storage_bucket VARCHAR(100);
+ALTER TABLE uploaded_files ADD COLUMN IF NOT EXISTS storage_path   VARCHAR(500);
+ALTER TABLE uploaded_files ADD COLUMN IF NOT EXISTS public_url     TEXT;
+ALTER TABLE uploaded_files ADD COLUMN IF NOT EXISTS mime_type      VARCHAR(150);
+ALTER TABLE uploaded_files ADD COLUMN IF NOT EXISTS extension      VARCHAR(20);
+ALTER TABLE uploaded_files ADD COLUMN IF NOT EXISTS updated_at     TIMESTAMP DEFAULT NOW();
+
+-- Un fichier physique est retrouvé par nom lors du téléchargement/preview
+-- (la colonne "source" de document_chunks correspond à "filename" ici) :
+-- un index accélère cette recherche.
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_filename
+    ON uploaded_files (filename);
 
 -- ============================================================
 -- Utilisateurs (authentification simple : username + mot de passe)

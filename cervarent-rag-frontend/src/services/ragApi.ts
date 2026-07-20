@@ -261,6 +261,34 @@ export const ragApi = {
     URL.revokeObjectURL(url);
   },
 
+  /**
+   * GET /api/rag/documents/{source}/preview — récupère le document original
+   * (blob binaire tel qu'uploadé) pour l'afficher DANS l'application
+   * (fenêtre de prévisualisation), sans déclencher de téléchargement.
+   *
+   * Retourne `null` si aucun fichier original n'est disponible pour cette
+   * source (ex : document indexé avant la mise en place de Supabase Storage) :
+   * le composant appelant doit alors proposer un repli (ex: afficher
+   * uniquement l'extrait texte déjà connu côté frontend).
+   */
+  async previewDocument(source: string): Promise<{ blob: Blob; contentType: string } | null> {
+    const baseURL = apiClient.defaults.baseURL ?? '/api';
+
+    const response = await fetch(`${baseURL}/rag/documents/${encodeURIComponent(source)}/preview`, {
+      method: 'GET',
+      headers: { ...getAuthHeader() },
+    });
+
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error("Impossible de charger l'aperçu de ce document.");
+    }
+
+    const blob = await response.blob();
+    const contentType = response.headers.get('Content-Type') ?? 'application/octet-stream';
+    return { blob, contentType };
+  },
+
   /** POST /api/rag/upload — upload d'un fichier (PDF, TXT, DOCX) pour indexation. */
   async uploadFile(file: File, mode: UploadMode = 'thinking'): Promise<UploadResponse> {
     const formData = new FormData();

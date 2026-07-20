@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { FileText, Trash2, RefreshCw, AlertCircle, Download } from 'lucide-react';
+import { FileText, Trash2, RefreshCw, AlertCircle, Download, Eye } from 'lucide-react';
 import { ragApi } from '../services/ragApi';
 import type { DocumentSummary } from '../types/api';
+import DocumentPreviewModal from './preview/DocumentPreviewModal';
+import OnboardingHint from './OnboardingHint';
 import './DocumentLibrary.css';
 
 /** Formate un nombre de caracteres en taille lisible (approximation simple, pas d'octets exacts) */
@@ -30,6 +32,8 @@ export default function DocumentLibrary() {
   // Garde en memoire quelle source est en cours de suppression, pour
   // desactiver uniquement CE bouton-la (pas tous les boutons de la liste)
   const [deletingSource, setDeletingSource] = useState<string | null>(null);
+  // Document actuellement affiché dans la fenêtre de prévisualisation (null = fermée)
+  const [previewing, setPreviewing] = useState<{ source: string; title: string } | null>(null);
 
   async function loadDocuments() {
     setLoading(true);
@@ -105,16 +109,48 @@ export default function DocumentLibrary() {
             </tr>
           </thead>
           <tbody>
-            {documents.map((doc) => (
+            {documents.map((doc, index) => (
               <tr key={doc.source}>
                 <td className="doc-library__title-cell">
-                  <FileText size={16} />
-                  <span>{doc.documentTitle || doc.source}</span>
+                  <button
+                    type="button"
+                    className="doc-library__title-btn"
+                    onClick={() => setPreviewing({ source: doc.source, title: doc.documentTitle || doc.source })}
+                    title="Prévisualiser ce document"
+                  >
+                    <FileText size={16} />
+                    <span>{doc.documentTitle || doc.source}</span>
+                  </button>
                 </td>
                 <td>{doc.chunksCount}</td>
                 <td>{formatSize(doc.totalCharacters)}</td>
                 <td>{formatDate(doc.addedAt)}</td>
                 <td className="doc-library__actions">
+                  {index === 0 ? (
+                    <OnboardingHint
+                      hintId="document-preview"
+                      text="Cliquez sur l'œil pour prévisualiser un document sans le télécharger."
+                      placement="top"
+                    >
+                      <button
+                        type="button"
+                        className="doc-library__preview"
+                        onClick={() => setPreviewing({ source: doc.source, title: doc.documentTitle || doc.source })}
+                        title="Prévisualiser ce document"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    </OnboardingHint>
+                  ) : (
+                    <button
+                      type="button"
+                      className="doc-library__preview"
+                      onClick={() => setPreviewing({ source: doc.source, title: doc.documentTitle || doc.source })}
+                      title="Prévisualiser ce document"
+                    >
+                      <Eye size={16} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="doc-library__download"
@@ -137,6 +173,14 @@ export default function DocumentLibrary() {
             ))}
           </tbody>
         </table>
+      )}
+
+      {previewing && (
+        <DocumentPreviewModal
+          source={previewing.source}
+          title={previewing.title}
+          onClose={() => setPreviewing(null)}
+        />
       )}
     </div>
   );

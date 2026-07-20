@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Pin, PinOff, Pencil, Trash2, Check, X, Sparkles } from 'lucide-react';
+import {
+  Plus, Search, Pin, PinOff, Pencil, Trash2, Check, X, Sparkles,
+  PanelLeftClose, PanelLeftOpen, LogOut,
+} from 'lucide-react';
 import type { Conversation } from '../../types/conversation';
 import { groupConversationsByDate } from '../../utils/dateGroups';
+import { useAuth } from '../../context/AuthContext';
+import UserAvatar from '../UserAvatar';
+import OnboardingHint from '../OnboardingHint';
 import './ConversationSidebar.css';
+
+/** Clé localStorage pour retenir l'état replié/déplié entre deux visites, comme Claude. */
+const COLLAPSE_STORAGE_KEY = 'cervarent_sidebar_collapsed';
 
 interface ConversationSidebarProps {
   conversations: Conversation[];
@@ -45,6 +54,22 @@ export default function ConversationSidebar({
   // déclenche réellement la suppression. Cela évite une popup native disgracieuse
   // tout en protégeant contre les clics accidentels sur l'icône corbeille.
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  // ============================================
+  // NOUVEAU : sidebar rétractable (façon Claude)
+  // ============================================
+  // État initialisé directement depuis localStorage (pas de useEffect) pour
+  // éviter un flash "ouvert puis fermé" au premier rendu si l'utilisateur
+  // avait replié la sidebar lors d'une session précédente.
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(
+    () => localStorage.getItem(COLLAPSE_STORAGE_KEY) === 'true'
+  );
+
+  useEffect(() => {
+    localStorage.setItem(COLLAPSE_STORAGE_KEY, String(isCollapsed));
+  }, [isCollapsed]);
+
+  const { user, logout } = useAuth();
 
   // La demande de confirmation expire après 3 secondes si l'utilisateur ne
   // confirme pas, pour ne jamais laisser un bouton "Supprimer ?" coincé.
@@ -147,45 +172,104 @@ export default function ConversationSidebar({
   }
 
   return (
-    <aside className="conv-sidebar">
-      <button type="button" className="conv-sidebar__new" onClick={onCreate}>
-        <Plus size={16} />
-        Nouvelle conversation
-      </button>
+    <aside className={isCollapsed ? 'conv-sidebar conv-sidebar--collapsed' : 'conv-sidebar'}>
+      <div className="conv-sidebar__top">
+        <OnboardingHint
+          hintId="new-conversation"
+          text="Démarrez une nouvelle conversation à tout moment, votre historique reste accessible ici."
+        >
+          <button
+            type="button"
+            className="conv-sidebar__new"
+            onClick={onCreate}
+            title="Nouvelle conversation"
+          >
+            <Plus size={16} />
+            {!isCollapsed && 'Nouvelle conversation'}
+          </button>
+        </OnboardingHint>
 
-      <div className="conv-sidebar__search">
-        <Search size={14} />
-        <input
-          type="text"
-          placeholder="Rechercher dans l'historique"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          aria-label="Rechercher dans l'historique des conversations"
-        />
+        <OnboardingHint
+          hintId="sidebar-toggle"
+          text="Repliez la sidebar à tout moment pour plus d'espace de lecture."
+        >
+          <button
+            type="button"
+            className="conv-sidebar__toggle"
+            onClick={() => setIsCollapsed((c) => !c)}
+            title={isCollapsed ? 'Ouvrir la sidebar' : 'Réduire la sidebar'}
+            aria-label={isCollapsed ? 'Ouvrir la sidebar' : 'Réduire la sidebar'}
+            aria-expanded={!isCollapsed}
+          >
+            {isCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        </OnboardingHint>
       </div>
 
-      <nav className="conv-sidebar__list" aria-label="Historique des conversations">
-        {pinned.length > 0 && (
-          <div className="conv-sidebar__group">
-            <h3>Épinglées</h3>
-            <ul>{pinned.map(renderItem)}</ul>
-          </div>
-        )}
+      {/* Recherche, historique et groupes : masqués (pas démontés) en mode
+          replié, pour conserver leur état (recherche en cours, etc.) et
+          animer uniquement leur opacité/hauteur plutôt que de tout recharger. */}
+      <br />
+      <div className="conv-sidebar__collapsible">
+        <div className="conv-sidebar__search">
+          <Search size={14} />
+          <input
+            type="text"
+            placeholder="Rechercher dans l'historique"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            aria-label="Rechercher dans l'historique des conversations"
+          />
+        </div>
 
-        {dateGroups.map((group) => (
-          <div className="conv-sidebar__group" key={group.label}>
-            <h3>{group.label}</h3>
-            <ul>{group.conversations.map(renderItem)}</ul>
-          </div>
-        ))}
+        <nav className="conv-sidebar__list" aria-label="Historique des conversations">
+          {pinned.length > 0 && (
+            <div className="conv-sidebar__group">
+              <h3>Épinglées</h3>
+              <ul>{pinned.map(renderItem)}</ul>
+            </div>
+          )}
 
-        {conversations.length === 0 && (
-          <p className="conv-sidebar__empty">
-            <Sparkles size={16} />
-            Aucune conversation ne correspond à votre recherche.
-          </p>
-        )}
-      </nav>
+          {dateGroups.map((group) => (
+            <div className="conv-sidebar__group" key={group.label}>
+              <h3>{group.label}</h3>
+              <ul>{group.conversations.map(renderItem)}</ul>
+            </div>
+          ))}
+
+          {conversations.length === 0 && (
+            <p className="conv-sidebar__empty">
+              <Sparkles size={16} />
+              Aucune conversation ne correspond à votre recherche.
+            </p>
+          )}
+        </nav>
+      </div>
+
+      {/* NOUVEAU : profil utilisateur en pied de sidebar, façon Claude.
+          Avatar généré automatiquement (initiales + couleur déterministe)
+          tant qu'aucune vraie photo de profil n'est disponible côté backend. */}
+      {user && (
+        <div className="conv-sidebar__profile">
+          <UserAvatar username={user.username} size={32} />
+          {!isCollapsed && (
+            <>
+              <span className="conv-sidebar__profile-name" title={user.username}>
+                {user.username}
+              </span>
+              <button
+                type="button"
+                className="conv-sidebar__profile-logout"
+                onClick={logout}
+                title="Se déconnecter"
+                aria-label="Se déconnecter"
+              >
+                <LogOut size={16} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

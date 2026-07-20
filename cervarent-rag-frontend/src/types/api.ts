@@ -95,3 +95,10 @@ export interface DocumentSummary {
   totalCharacters: number;
   addedAt: string;
 }
+
+/**
+ * Catégories de rendu supportées par la fenêtre de prévisualisation
+ * (voir components/preview/DocumentPreviewModal.tsx). Déterminée
+ * côté client à partir de l'extension/mime-type du document.
+ */
+export type PreviewKind = 'pdf' | 'docx' | 'txt' | 'image' | 'unsupported';

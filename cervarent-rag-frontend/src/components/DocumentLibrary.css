@@ -68,6 +68,40 @@
   gap: 8px;
 }
 
+/* Le titre est maintenant cliquable (ouvre la prévisualisation), mais doit
+   rester visuellement identique à l'ancien texte statique. */
+.doc-library__title-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.doc-library__title-btn:hover span {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.doc-library__preview {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.doc-library__preview:hover {
+  background: rgba(22, 163, 74, 0.1);
+  color: var(--color-primary);
+}
+
 .doc-library__delete {
   background: transparent;
   border: none;

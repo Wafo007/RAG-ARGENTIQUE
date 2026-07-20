@@ -16,10 +16,77 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  /* Animation fluide d'ouverture/fermeture, façon Claude */
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.conv-sidebar--collapsed {
+  width: 64px;
+}
+
+.conv-sidebar__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 16px 0;
+}
+
+/* Les deux boutons du haut de sidebar sont désormais enveloppés dans un
+   <span class="onboarding-hint"> (voir OnboardingHint.tsx). On reporte sur
+   ce wrapper le comportement flex qui était auparavant posé directement
+   sur les boutons, pour que le layout reste identique. */
+.conv-sidebar__top > .onboarding-hint:first-child {
+  flex: none;
+}
+.conv-sidebar__top > .onboarding-hint:last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.conv-sidebar--collapsed .conv-sidebar__top {
+  flex-direction: column;
+  margin: 16px 8px 0;
+}
+
+.conv-sidebar__toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.conv-sidebar__toggle:hover {
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+
+/* Contenu qui disparaît en douceur en mode replié (recherche + historique) */
+.conv-sidebar__collapsible {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
+.conv-sidebar--collapsed .conv-sidebar__collapsible {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .conv-sidebar__new {
-  margin: 16px;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -30,7 +97,14 @@
   color: var(--color-text-inverse);
   font-weight: 600;
   font-size: 14px;
+  white-space: nowrap;
   transition: background 0.15s ease;
+}
+
+.conv-sidebar--collapsed .conv-sidebar__new {
+  width: 34px;
+  flex: none;
+  padding: 10px;
 }
 
 .conv-sidebar__new:hover {
@@ -171,4 +245,52 @@
   padding: 24px 12px;
   text-align: center;
   justify-content: center;
+}
+
+/* ============================================================
+   PROFIL UTILISATEUR (pied de sidebar, façon Claude)
+   ============================================================ */
+.conv-sidebar__profile {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.conv-sidebar--collapsed .conv-sidebar__profile {
+  justify-content: center;
+  padding: 12px 8px;
+}
+
+.conv-sidebar__profile-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conv-sidebar__profile-logout {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.conv-sidebar__profile-logout:hover {
+  background: var(--color-bg);
+  color: var(--color-danger);
 }

@@ -63,6 +63,13 @@ public class FileUploadService {
     /** Service d'embedding Mistral - génère les vecteurs pour le RAG */
     private final EmbeddingService embeddingService;
 
+    /**
+     * NOUVEAU : service d'accès à Supabase Storage.
+     * Permet de sauvegarder le FICHIER ORIGINAL (pas seulement ses chunks),
+     * pour pouvoir ensuite le télécharger ou le prévisualiser tel quel.
+     */
+    private final SupabaseStorageService supabaseStorageService;
+
     // ============================================
     // CONSTANTES
     // ============================================
@@ -88,6 +95,10 @@ public class FileUploadService {
      */
     private static final int BATCH_SIZE = 10;
 
+    /** Nom du bucket Supabase Storage utilisé (voir application.properties). */
+    @org.springframework.beans.factory.annotation.Value("${supabase.storage.bucket}")
+    private String storageBucket;
+
     // ============================================
     // POINT D'ENTRÉE PRINCIPAL
     // ============================================
@@ -108,16 +119,30 @@ public class FileUploadService {
         log.info("Réception du fichier '{}' ({} octets) en mode '{}'",
                 file.getOriginalFilename(), file.getSize(), mode);
 
-        // ÉTAPE 1 : Sauvegarder les métadonnées (pas le fichier brut, pour économiser
-        // la mémoire)
-        UploadedFile uploadedFile = saveFileMetadata(file);
-        log.info("Fichier enregistré avec ID: {}", uploadedFile.getId());
+        // ÉTAPE 0 (NOUVEAU) : lire les octets bruts UNE SEULE FOIS. On les
+        // réutilise à la fois pour l'upload Supabase Storage et pour
+        // l'extraction/indexation, afin de ne jamais dépendre d'un second
+        // appel à file.getInputStream() (non garanti après la fin de la
+        // requête HTTP, notamment en mode asynchrone).
+        final byte[] rawBytes = file.getBytes();
 
-        // ÉTAPE 2 : Router vers le bon mode
+        // ÉTAPE 1 (NOUVEAU) : sauvegarder le DOCUMENT ORIGINAL dans Supabase
+        // Storage. C'est ce qui manquait : avant, seuls les chunks/embeddings
+        // étaient conservés, rendant impossible tout téléchargement ou
+        // prévisualisation fidèle du fichier réellement uploadé.
+        String storagePath = supabaseStorageService.upload(
+                file.getOriginalFilename(), file.getContentType(), rawBytes);
+
+        // ÉTAPE 2 : Sauvegarder les métadonnées, y compris la localisation
+        // du fichier original dans le bucket.
+        UploadedFile uploadedFile = saveFileMetadata(file, storagePath);
+        log.info("Fichier enregistré avec ID: {} (storage: {})", uploadedFile.getId(), storagePath);
+
+        // ÉTAPE 3 : Router vers le bon mode de traitement RAG (inchangé)
         if ("thinking".equalsIgnoreCase(mode)) {
-            return processSync(file, uploadedFile);
+            return processSync(rawBytes, uploadedFile);
         } else {
-            return processAsync(file, uploadedFile);
+            return processAsync(rawBytes, uploadedFile);
         }
     }
 
@@ -132,7 +157,7 @@ public class FileUploadService {
      * Pour les PDF : utilise le traitement page par page (streaming).
      * Pour TXT/DOCX : traitement classique (fichiers généralement plus petits).
      */
-    private UploadResponse processSync(MultipartFile file, UploadedFile uploadedFile) {
+    private UploadResponse processSync(byte[] rawBytes, UploadedFile uploadedFile) {
         log.info("Mode THINKING démarré pour fichier ID {}", uploadedFile.getId());
 
         try {
@@ -144,11 +169,12 @@ public class FileUploadService {
 
             // Si c'est un PDF → traitement streaming page par page
             if (isPdf(contentType, filename)) {
-                chunksCount = processPdfStreaming(file.getInputStream(), filename, fileId);
+                chunksCount = processPdfStreaming(new java.io.ByteArrayInputStream(rawBytes), filename, fileId);
             }
             // Sinon → traitement classique
             else {
-                String fullText = extractText(file, contentType);
+                String fullText = extractTextFromStream(
+                        new java.io.ByteArrayInputStream(rawBytes), contentType, filename);
                 updateFileFields(fileId, "PROCESSING",
                         fullText.substring(0, Math.min(1000, fullText.length())), null, null);
                 chunksCount = indexTextToRag(fullText, filename);
@@ -179,25 +205,24 @@ public class FileUploadService {
      * Important : on lit les bytes du fichier MAINTENANT car le MultipartFile
      * n'est plus accessible après la fin de la requête HTTP.
      */
-    private UploadResponse processAsync(MultipartFile file, UploadedFile uploadedFile) {
+    private UploadResponse processAsync(byte[] rawBytes, UploadedFile uploadedFile) {
         log.info("Mode INSTANT lancé pour fichier ID {}", uploadedFile.getId());
 
         try {
-            final byte[] fileBytes = file.getBytes();
-            final String contentType = file.getContentType();
-            final String filename = file.getOriginalFilename();
+            final String contentType = uploadedFile.getContentType();
+            final String filename = uploadedFile.getFilename();
             final Long fileId = uploadedFile.getId();
 
             // Lancer le traitement dans un thread séparé
-            processAsyncTask(fileId, fileBytes, contentType, filename);
+            processAsyncTask(fileId, rawBytes, contentType, filename);
 
             return buildResponse(uploadedFile, "PROCESSING", null,
                     "Fichier reçu. Traitement en arrière-plan. " +
                             "GET /api/rag/files/" + fileId + "/status pour suivre.");
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             markAsFailed(uploadedFile.getId(), e.getMessage());
-            
+
             return buildResponse(uploadedFile, "FAILED", null,
                     "Erreur lecture : " + e.getMessage());
         }
@@ -423,11 +448,6 @@ public class FileUploadService {
                 || filename.toLowerCase().endsWith(".pdf");
     }
 
-    /** Extrait le texte d'un MultipartFile (pour le mode synchrone non-PDF) */
-    private String extractText(MultipartFile file, String contentType) throws IOException {
-        return extractTextFromStream(file.getInputStream(), contentType, file.getOriginalFilename());
-    }
-
     /** Dispatcher d'extraction selon le format */
     private String extractTextFromStream(InputStream inputStream, String contentType, String filename)
             throws IOException {
@@ -475,17 +495,37 @@ public class FileUploadService {
     // PERSISTENCE (JdbcTemplate)
     // ============================================
 
-    /** Sauvegarde les métadonnées du fichier (pas le contenu binaire) */
-    private UploadedFile saveFileMetadata(MultipartFile file) throws IOException {
+    /**
+     * Sauvegarde les métadonnées du fichier, y compris (NOUVEAU) la
+     * localisation du document original dans Supabase Storage : c'est cette
+     * information (storage_bucket / storage_path / mime_type / extension)
+     * qui permet ensuite de le télécharger ou de le prévisualiser tel quel,
+     * au lieu de reconstituer un texte approximatif à partir des chunks.
+     */
+    private UploadedFile saveFileMetadata(MultipartFile file, String storagePath) throws IOException {
+        String extension = extractExtension(file.getOriginalFilename());
+
         String sql = """
-                INSERT INTO uploaded_files (filename, content_type, file_size, status, created_at)
-                VALUES (?, ?, ?, 'PENDING', NOW())
+                INSERT INTO uploaded_files
+                (filename, content_type, file_size, status, created_at,
+                 storage_bucket, storage_path, mime_type, extension, updated_at)
+                VALUES (?, ?, ?, 'PENDING', NOW(), ?, ?, ?, ?, NOW())
                 RETURNING id, filename, content_type, file_size, status,
-                          extracted_text, chunks_count, error_message, created_at, completed_at
+                          extracted_text, chunks_count, error_message, created_at, completed_at,
+                          storage_bucket, storage_path, public_url, mime_type, extension, updated_at
                 """;
 
         return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> mapFromResultSet(rs),
-                file.getOriginalFilename(), file.getContentType(), file.getSize());
+                file.getOriginalFilename(), file.getContentType(), file.getSize(),
+                storageBucket, storagePath, file.getContentType(), extension);
+    }
+
+    /** Extrait l'extension d'un nom de fichier (sans le point), en minuscule. */
+    private String extractExtension(String filename) {
+        if (filename == null || !filename.contains(".")) {
+            return "";
+        }
+        return filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
     }
 
     private UploadedFile getFileById(Long fileId) {
@@ -533,7 +573,35 @@ public class FileUploadService {
         uf.setCreatedAt(rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null);
         uf.setCompletedAt(
                 rs.getTimestamp("completed_at") != null ? rs.getTimestamp("completed_at").toLocalDateTime() : null);
+
+        // NOUVEAU : colonnes de localisation Supabase Storage
+        uf.setStorageBucket(rs.getString("storage_bucket"));
+        uf.setStoragePath(rs.getString("storage_path"));
+        uf.setPublicUrl(rs.getString("public_url"));
+        uf.setMimeType(rs.getString("mime_type"));
+        uf.setExtension(rs.getString("extension"));
+        uf.setUpdatedAt(rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null);
         return uf;
+    }
+
+    // ============================================
+    // NOUVEAU : ACCES AU FICHIER ORIGINAL PAR NOM
+    // ============================================
+
+    /**
+     * Retrouve les métadonnées de stockage d'un fichier par son nom
+     * (= colonne "source" de document_chunks, puisque l'indexation utilise
+     * le nom de fichier original comme identifiant de source).
+     *
+     * Utilisé par le contrôleur pour le téléchargement/la prévisualisation :
+     * s'il existe plusieurs uploads portant le même nom, on prend le plus
+     * récent (created_at DESC) pour rester cohérent avec le comportement
+     * "un fichier = un nom" déjà utilisé par la bibliothèque documentaire.
+     */
+    public UploadedFile getFileByFilename(String filename) {
+        String sql = "SELECT * FROM uploaded_files WHERE filename = ? ORDER BY created_at DESC LIMIT 1";
+        List<UploadedFile> results = jdbcTemplate.query(sql, (rs, rowNum) -> mapFromResultSet(rs), filename);
+        return results.isEmpty() ? null : results.get(0);
     }
 
     // ============================================

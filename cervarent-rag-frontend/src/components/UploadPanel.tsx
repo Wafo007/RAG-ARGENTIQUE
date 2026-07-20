@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { UploadCloud, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { ragApi } from '../services/ragApi';
 import type { UploadMode, UploadResponse } from '../types/api';
+import OnboardingHint from './OnboardingHint';
 import './UploadPanel.css';
 
 /**
@@ -63,7 +64,12 @@ export default function UploadPanel() {
   return (
     <div className="upload-panel">
       <div className="upload-panel__mode">
-        <span>Mode de traitement</span>
+        <OnboardingHint
+          hintId="upload-panel"
+          text="Ajoutez vos documents ici (PDF, TXT, DOCX) : ils seront automatiquement indexés et deviendront des sources pour l'IA."
+        >
+          <span>Mode de traitement</span>
+        </OnboardingHint>
         <div className="upload-panel__toggle">
           <button
             type="button"
