@@ -17,7 +17,7 @@ export default function AuthLayout({ title, subtitle, children }: {
             maxWidth: '200px',
             height: 'auto',
             borderRadius: '100%',
-            objetFit: 'cover'
+            objectFit: 'cover'
           }}
         />
         <h1>{title}</h1>
