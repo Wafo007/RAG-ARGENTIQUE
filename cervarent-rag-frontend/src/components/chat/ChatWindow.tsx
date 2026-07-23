@@ -181,7 +181,15 @@ export default function ChatWindow({
             <div className="chat-window__empty-icon">
               <Sparkles size={26} />
             </div>
-            <div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                textAlign: 'center',
+                width: '100%'
+              }}
+            >
               <UserGreeting />
             </div>
             <h2>Recherche augmentée par IA</h2>

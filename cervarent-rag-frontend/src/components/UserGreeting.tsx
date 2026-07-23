@@ -21,18 +21,15 @@ export default function UserGreeting() {
   if (!user) return null;
 
   return (
-    <div className="user-greeting">
+    <div className="user-greeting"
+      style={{
+        textAlign: 'center',
+        width: '100%'
+      }}
+    >
       <span className="user-greeting__text">
         <h1>{greeting}, <strong>{user.username}</strong></h1>
       </span>
-      <button
-        type="button"
-        className="user-greeting__logout"
-        onClick={logout}
-        title="Se déconnecter"
-      >
-        <LogOut size={16} />
-      </button>
     </div>
   );
 }

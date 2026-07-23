@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import { Bot, User, FileText, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import type { ChatMessage } from '../../types/conversation';
 import './ChatMessageBubble.css';
+import { Sparkles } from 'lucide-react';
 import SourceCard from './SourceCard';
 import MarkdownRenderer from '../MarkdownRenderer';
 import MessageFeedback from './MessageFeedback';
@@ -43,7 +44,7 @@ export default function ChatMessageBubble({ message, onRegenerate, isRegeneratin
   return (
     <div className={isUser ? 'chat-msg chat-msg--user' : 'chat-msg chat-msg--assistant'}>
       <div className="chat-msg__avatar" aria-hidden="true">
-        {isUser ? <User size={16} /> : <Bot size={16} />}
+        {isUser ? <User size={16} /> : <Sparkles size={16} />}
       </div>
 
       <div className="chat-msg__body">

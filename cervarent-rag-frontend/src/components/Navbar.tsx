@@ -34,9 +34,15 @@ export default function Navbar() {
   return (
     <header className="navbar">
       <div className="navbar__brand">
-        <span className="navbar__logo" aria-hidden="true">
-          <Leaf size={22} strokeWidth={2.5} />
-        </span>
+        <img src="logo-mark.png"
+          style= {{
+            width: '15%',
+            maxWidth: '200px',
+            height: 'auto',
+            borderRadius: '100%',
+            objetFit: 'cover'
+          }}
+        />
         <div className="navbar__brand-text">
           <strong>CERVARENT</strong>
           <span>Centre de recherche</span>

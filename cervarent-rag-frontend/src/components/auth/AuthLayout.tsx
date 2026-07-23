@@ -11,9 +11,15 @@ export default function AuthLayout({ title, subtitle, children }: {
   return (
     <div className="auth-layout">
       <div className="auth-layout__card">
-        <div className="auth-layout__icon">
-          <Sparkles size={28} />
-        </div>
+        <img src="logo-mark.png" alt="logo du cervarent"
+          style= {{
+            width: '30%',
+            maxWidth: '200px',
+            height: 'auto',
+            borderRadius: '100%',
+            objetFit: 'cover'
+          }}
+        />
         <h1>{title}</h1>
         <p className="auth-layout__subtitle">{subtitle}</p>
         {children}
