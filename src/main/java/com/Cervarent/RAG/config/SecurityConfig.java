@@ -32,17 +32,17 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable()) // API stateless avec JWT, pas de session/cookie -> CSRF non pertinent
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                // Routes publiques : inscription, connexion, mot de passe oublie
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/rag/health").permitAll()
-                // Tout le reste necessite d'etre connecte
-                .anyRequest().authenticated()
-            )
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .csrf(csrf -> csrf.disable()) // API stateless avec JWT, pas de session/cookie -> CSRF non pertinent
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/", "/index.html", "/assets/**", "/favicon.ico", "/static/**").permitAll()
+                        // Routes publiques : inscription, connexion, mot de passe oublie
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/rag/health").permitAll()
+                        // Tout le reste necessite d'etre connecte
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
