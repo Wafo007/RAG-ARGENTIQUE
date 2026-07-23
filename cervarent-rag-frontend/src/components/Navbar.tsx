@@ -40,7 +40,7 @@ export default function Navbar() {
             maxWidth: '200px',
             height: 'auto',
             borderRadius: '100%',
-            objetFit: 'cover'
+            objectFit: 'cover'
           }}
         />
         <div className="navbar__brand-text">
