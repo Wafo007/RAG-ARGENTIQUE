@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: cervarent-rag-service
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter        # à ajuster selon vos besoins (free / starter / standard)
+    region: frankfurt     # proche de eu-central-1 (Supabase) pour la latence
+    autoDeploy: true
+    healthCheckPath: /api/rag/health
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: SPRING_AI_MISTRALAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: APP_JWT_SECRET
+        sync: false

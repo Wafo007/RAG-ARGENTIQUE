@@ -1,0 +1,29 @@
+# Frontend
+cervarent-rag-frontend/node_modules
+cervarent-rag-frontend/dist
+cervarent-rag-frontend/.vite
+
+# Backend
+target/
+*.class
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Fichiers sensibles / logs / docs non nécessaires au build
+rag-queries.log
+*.log
+README.md
+cervarent-rag-frontend/README.md
+CERVARENT-AI-Presentation.pptx
+Manuel-Utilisation-CERVARENT-AI.pdf
+
+# Docker lui-même
+.dockerignore
+docker-compose.yml

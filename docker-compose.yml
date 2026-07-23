@@ -1,0 +1,22 @@
+# Usage local uniquement : docker-compose up --build
+# Se connecte directement à Supabase (cloud), aucune base locale requise.
+version: "3.9"
+
+services:
+  rag-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8087:8087"
+    environment:
+      - PORT=8087
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - SPRING_AI_MISTRALAI_API_KEY=${SPRING_AI_MISTRALAI_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - APP_JWT_SECRET=${APP_JWT_SECRET}
+    env_file:
+      - .env   # fichier local, non versionné (voir .gitignore)
