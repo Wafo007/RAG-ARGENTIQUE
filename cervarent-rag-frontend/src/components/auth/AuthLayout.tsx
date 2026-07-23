@@ -11,7 +11,7 @@ export default function AuthLayout({ title, subtitle, children }: {
   return (
     <div className="auth-layout">
       <div className="auth-layout__card">
-        <img src="logo-mark.png" alt="logo du cervarent"
+        <img src="/logo-mark.png" alt="logo du cervarent"
           style= {{
             width: '30%',
             maxWidth: '200px',

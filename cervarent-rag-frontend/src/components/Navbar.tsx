@@ -34,7 +34,7 @@ export default function Navbar() {
   return (
     <header className="navbar">
       <div className="navbar__brand">
-        <img src="logo-mark.png"
+        <img src="/logo-mark.png"
           style= {{
             width: '15%',
             maxWidth: '200px',
